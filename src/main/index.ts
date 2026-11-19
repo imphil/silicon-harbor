@@ -25,6 +25,17 @@ function appInfo(): AppInfo {
 
 function registerIpc(): void {
   ipcMain.handle(IpcChannel.appInfo, () => appInfo())
+
+  // Placeholders until M1 (environments, settings) and M2 (requirements)
+  // implement them. Every channel is registered so calls fail with a clear
+  // message instead of "no handler registered".
+  const notImplemented = (name: string) => () => {
+    throw new Error(`${name} is not implemented yet`)
+  }
+  for (const [name, channel] of Object.entries(IpcChannel)) {
+    if (channel === IpcChannel.appInfo || channel.startsWith("evt:")) continue
+    ipcMain.handle(channel, notImplemented(name))
+  }
 }
 
 function createWindow(): void {
