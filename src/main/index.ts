@@ -1,10 +1,65 @@
-import { existsSync } from "node:fs"
+import { existsSync, mkdirSync } from "node:fs"
+import { homedir } from "node:os"
 import { join } from "node:path"
-import { app, BrowserWindow, ipcMain, shell } from "electron"
+import { app, BrowserWindow, clipboard, ipcMain, shell } from "electron"
 import { type AppInfo, IpcChannel } from "../shared/api.js"
+import { DevsyClient } from "./devsy/client.js"
+import { buildCliEnv, defaultDevsyHome } from "./devsy/env.js"
+import { CliRunner } from "./devsy/runner.js"
 import { devsyBinaryPath } from "./devsy-path.js"
+import { EnvironmentService } from "./environments.js"
+import { registerIpc } from "./ipc.js"
+import { LogStore } from "./log-store.js"
+import { SettingsStore } from "./settings-store.js"
 
 let mainWindow: BrowserWindow | null = null
+let runner: CliRunner | null = null
+let environments: EnvironmentService | null = null
+
+function broadcast(channel: string, payload: unknown): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) window.webContents.send(channel, payload)
+  }
+}
+
+function startBackend(): void {
+  const devsyHome = defaultDevsyHome(process.platform, homedir(), process.env)
+  mkdirSync(devsyHome, { recursive: true })
+  const info = appInfo()
+  runner = new CliRunner({
+    // A missing binary surfaces as a failed operation with a clear message.
+    binaryPath: info.devsyPath ?? "devsy",
+    env: buildCliEnv({
+      hostEnv: process.env,
+      platform: process.platform,
+      homeDir: homedir(),
+      devsyHome,
+    }),
+  })
+  const client = new DevsyClient(runner)
+  const settings = new SettingsStore(
+    join(app.getPath("userData"), "settings.json"),
+  )
+  const logs = new LogStore(join(app.getPath("userData"), "logs"))
+  environments = new EnvironmentService({
+    client,
+    logs,
+    settings: () => settings.get(),
+    watchDir: devsyHome,
+    onChange: (envs) => broadcast(IpcChannel.evtEnvironments, envs),
+    onLog: (id, line) => broadcast(IpcChannel.evtLog, { id, line }),
+  })
+  registerIpc({
+    ipcMain,
+    appInfo,
+    environments,
+    settings,
+    client,
+    devsyHome,
+    writeClipboard: (text) => clipboard.writeText(text),
+  })
+  void environments.start()
+}
 
 function appInfo(): AppInfo {
   const devsyPath = devsyBinaryPath({
@@ -20,21 +75,6 @@ function appInfo(): AppInfo {
     platform: process.platform,
     arch: process.arch,
     devsyPath: existsSync(devsyPath) ? devsyPath : null,
-  }
-}
-
-function registerIpc(): void {
-  ipcMain.handle(IpcChannel.appInfo, () => appInfo())
-
-  // Placeholders until M1 (environments, settings) and M2 (requirements)
-  // implement them. Every channel is registered so calls fail with a clear
-  // message instead of "no handler registered".
-  const notImplemented = (name: string) => () => {
-    throw new Error(`${name} is not implemented yet`)
-  }
-  for (const [name, channel] of Object.entries(IpcChannel)) {
-    if (channel === IpcChannel.appInfo || channel.startsWith("evt:")) continue
-    ipcMain.handle(channel, notImplemented(name))
   }
 }
 
@@ -82,7 +122,7 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   void app.whenReady().then(() => {
-    registerIpc()
+    startBackend()
     createWindow()
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -92,4 +132,10 @@ if (!app.requestSingleInstanceLock()) {
   // Closing the window quits the app on every platform: environments keep
   // running in Docker regardless, and there is no tray icon.
   app.on("window-all-closed", () => app.quit())
+
+  // Detached Devsy tasks keep running; only our followers and polls stop.
+  app.on("will-quit", () => {
+    environments?.stop()
+    runner?.killAll()
+  })
 }
