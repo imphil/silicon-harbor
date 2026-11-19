@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
@@ -32,13 +32,17 @@ describe("fetch-devsy", () => {
 
   it("finds goreleaser output directories for a local build", () => {
     const dist = mkdtempSync(join(tmpdir(), "sh-dist-"))
-    mkdirSync(join(dist, "devsy-dev_darwin_arm64_v8.0"))
-    writeFileSync(join(dist, "devsy-dev_darwin_arm64_v8.0", "devsy"), "")
-    expect(localCandidates(dist, "mac-arm64")[0]).toBe(
-      join(dist, "devsy-dev_darwin_arm64_v8.0", "devsy"),
-    )
-    expect(localCandidates(dist, "win-x64")).toEqual([
-      join(dist, "devsy-windows-amd64.exe"),
-    ])
+    try {
+      mkdirSync(join(dist, "devsy-dev_darwin_arm64_v8.0"))
+      writeFileSync(join(dist, "devsy-dev_darwin_arm64_v8.0", "devsy"), "")
+      expect(localCandidates(dist, "mac-arm64")[0]).toBe(
+        join(dist, "devsy-dev_darwin_arm64_v8.0", "devsy"),
+      )
+      expect(localCandidates(dist, "win-x64")).toEqual([
+        join(dist, "devsy-windows-amd64.exe"),
+      ])
+    } finally {
+      rmSync(dist, { recursive: true, force: true })
+    }
   })
 })
