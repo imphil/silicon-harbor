@@ -207,19 +207,18 @@ export class DevsyClient {
     await this.run(["workspace", "set-ide", id, ide])
   }
 
-  async readSetupLog(id: string, runId = "latest"): Promise<SetupLogRead> {
-    return parseJson(
-      await this.run([
-        "workspace",
-        "logs",
-        id,
-        "--source",
-        "setup",
-        "--run",
-        runId,
-      ]),
-      SetupLogReadSchema,
-    )
+  /**
+   * One page of a run's setup history (lifecycle hook and image build
+   * output). `after` is the previous page's nextCursor.
+   */
+  async readSetupLog(
+    id: string,
+    runId = "latest",
+    after?: string,
+  ): Promise<SetupLogRead> {
+    const args = ["workspace", "logs", id, "--source", "setup", "--run", runId]
+    if (after) args.push("--after", after)
+    return parseJson(await this.run(args, 30_000), SetupLogReadSchema)
   }
 
   async providerNames(): Promise<string[]> {

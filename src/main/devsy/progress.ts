@@ -66,10 +66,12 @@ const PHASE_DETAIL: Record<string, string> = {
 
 /**
  * Devsy sub-steps worth naming (its own `step` text otherwise stays out of
- * the UI). Both come from our fork's --clone-into-volume bootstrap.
+ * the UI). All come from our fork's --clone-into-volume bootstrap.
  */
 const STEP_DETAIL: Record<string, string> = {
   "preparing the source volume": "Preparing the source volume",
+  "downloading the helper image":
+    "Downloading the helper container (first time only)",
   "building the helper image":
     "Building the helper container (first time only, can take a few minutes)",
 }

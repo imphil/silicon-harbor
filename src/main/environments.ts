@@ -27,6 +27,7 @@ import type { StreamHandle } from "./devsy/runner"
 import type {
   CliErrorInfo,
   ResultEnvelope,
+  SetupLogRecord,
   WorkspaceListEntry,
 } from "./devsy/schemas"
 import type { LogStore } from "./log-store"
@@ -52,6 +53,12 @@ export interface EnvironmentServiceOptions {
   watchDir?: string
   listIntervalMs?: number
   statusIntervalMs?: number
+  /**
+   * How often the setup history (lifecycle hook and image build output) is
+   * read while an `up` runs. `workspace logs --follow` can end before the
+   * run does, so we poll with a cursor instead.
+   */
+  setupLogIntervalMs?: number
   now?: () => Date
 }
 
@@ -86,7 +93,9 @@ interface EnvRecord {
 const IDES: IdeId[] = ["vscode", "bob", "codium"]
 const UP_KINDS: OperationKind[] = ["create", "start", "rebuild"]
 const STATUS_BACKOFF_MAX_MS = 5 * 60_000
-const SETUP_LOG_MAX_LINES = 500
+/** Setup output lines shown per operation; the rest stays in Devsy's store. */
+const SETUP_LOG_MAX_LINES = 5000
+const SETUP_LOG_INTERVAL_MS = 3000
 
 export class BusyError extends Error {
   constructor(id: string) {
@@ -449,6 +458,7 @@ export class EnvironmentService {
     let error: CliErrorInfo | undefined
     const logErrors: string[] = []
 
+    const setupLog = this.followSetupLog(r, run)
     run.handle = this.opts.client.followTask(run.taskId, {
       onEnvelope: (envelope) => {
         if (envelope.kind === "status") {
@@ -473,6 +483,8 @@ export class EnvironmentService {
     })
 
     const code = await run.handle.done
+    // The rest of the setup output, before the outcome.
+    await setupLog.stop()
     // Devsy created the workspace (or knew it already) unless the clone failed.
     await this.refreshList().catch(() => {})
     if (result && code === 0) {
@@ -489,7 +501,6 @@ export class EnvironmentService {
         },
       })
     }
-    await this.appendSetupLog(r, run.runId)
     await this.refreshStatuses([r.id]).catch(() => {})
   }
 
@@ -592,26 +603,83 @@ export class EnvironmentService {
     return this.providerReady
   }
 
-  private async appendSetupLog(r: EnvRecord, runId?: string): Promise<void> {
-    if (!runId || !this.records.get(r.id)?.exists) return
-    try {
-      const setup = await this.opts.client.readSetupLog(r.id, runId)
-      const outputs = setup.records.filter(
-        (rec) => rec.kind === "output" && rec.text,
-      )
-      if (outputs.length === 0) return
-      this.log(r.id, "info", "── Setup output ──")
-      for (const rec of outputs.slice(-SETUP_LOG_MAX_LINES)) {
-        for (const line of (rec.text ?? "").replace(/\n$/, "").split("\n"))
-          this.log(
-            r.id,
-            rec.stream === "stderr" ? "warn" : "info",
-            line,
-            rec.time,
-          )
+  /**
+   * Shows the run's setup history (initializeCommand and other lifecycle
+   * hooks, the image build) in the environment log while it runs. Records
+   * are shown once each (producer + sequence); stop() reads the rest.
+   */
+  private followSetupLog(
+    r: EnvRecord,
+    run: RunningOp,
+  ): { stop(): Promise<void> } {
+    const runId = run.runId
+    if (!runId) return { stop: async () => {} }
+    const seen = new Set<string>()
+    let after: string | undefined
+    let shown = 0
+    let truncated = false
+    let stopped = false
+    let wake: (() => void) | undefined
+
+    const show = (rec: SetupLogRecord) => {
+      if (rec.kind !== "output" || !rec.text) return
+      for (const line of rec.text.replace(/\n$/, "").split("\n")) {
+        if (shown === 0) this.log(r.id, "info", "── Setup output ──")
+        if (shown >= SETUP_LOG_MAX_LINES) {
+          if (!truncated)
+            this.log(
+              r.id,
+              "warn",
+              `More setup output than shown here: devsy workspace logs ${r.id} --source setup --run ${runId}`,
+            )
+          truncated = true
+          return
+        }
+        shown++
+        this.log(
+          r.id,
+          rec.stream === "stderr" ? "warn" : "info",
+          line,
+          rec.time,
+        )
       }
-    } catch {
-      // Setup logs are best-effort.
+    }
+    const drain = async () => {
+      // Bounded: a long build log comes in pages.
+      for (let page = 0; page < 100; page++) {
+        const res = await this.opts.client.readSetupLog(r.id, runId, after)
+        for (const rec of res.records) {
+          const key = `${rec.producerId ?? ""}:${rec.sequence ?? ""}:${rec.kind}:${rec.time ?? ""}`
+          if (seen.has(key)) continue
+          seen.add(key)
+          show(rec)
+        }
+        if (res.nextCursor) after = res.nextCursor
+        if (!res.hasMore) return
+      }
+    }
+    const interval = this.opts.setupLogIntervalMs ?? SETUP_LOG_INTERVAL_MS
+    const loop = (async () => {
+      while (!stopped) {
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, interval)
+          wake = () => {
+            clearTimeout(timer)
+            resolve()
+          }
+        })
+        if (stopped) return
+        // Before Devsy has created the workspace this fails; try again.
+        await drain().catch(() => {})
+      }
+    })()
+    return {
+      stop: async () => {
+        stopped = true
+        wake?.()
+        await loop
+        await drain().catch(() => {})
+      },
     }
   }
 

@@ -158,6 +158,8 @@ export const TaskListSchema = z.array(TaskRecordSchema)
 
 export const SetupLogRecordSchema = z.object({
   kind: z.string(),
+  producerId: z.string().optional(),
+  sequence: z.number().optional(),
   time: z.string().optional(),
   stream: z.string().optional(),
   text: z.string().optional(),
@@ -165,10 +167,14 @@ export const SetupLogRecordSchema = z.object({
   state: z.string().optional(),
   reason: z.string().optional(),
 })
+export type SetupLogRecord = z.infer<typeof SetupLogRecordSchema>
 export const SetupLogReadSchema = z.object({
   schemaVersion: z.number().optional(),
   run: z.object({ runId: z.string().optional() }).partial().optional(),
   records: z.array(SetupLogRecordSchema).default([]),
+  /** Pass as --after to read only what came later. */
+  nextCursor: z.string().optional(),
+  hasMore: z.boolean().optional(),
 })
 export type SetupLogRead = z.infer<typeof SetupLogReadSchema>
 

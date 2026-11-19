@@ -140,6 +140,39 @@ describe("EnvironmentService", () => {
     expect(service.getLog(id).length).toBeGreaterThan(5)
   })
 
+  it("shows setup output while the run goes on, each line once", async () => {
+    const script = baseScript()
+      .set("workspace up", "a-up-submit")
+      .set("workspace task logs", "b-task-logs-follow")
+      .set("workspace status", "e2-status-running")
+    const { cli, service, logs, env, until } = setup(script, {
+      setupLogIntervalMs: 1,
+    })
+    const { id } = await service.create({ repoUrl: REPO, name: "try-python" })
+    script.set("workspace list", "d2-list-running")
+    await until(() => env(id)?.state === "running", "running")
+
+    const reads = cli.calls.filter((c) => c[1] === "logs")
+    expect(reads.length).toBeGreaterThan(1)
+    // Every read after the first continues from the previous cursor.
+    expect(reads.slice(1).every((c) => c.includes("--after"))).toBe(true)
+    const texts = logs.filter((l) => l.id === id).map((l) => l.line.text)
+    expect(texts.filter((t) => t === "── Setup output ──")).toHaveLength(1)
+    // Each output line exactly as often as the setup history has it, although
+    // the fixture answers every poll with the whole history.
+    const expected = new Map<string, number>()
+    for (const raw of fixture("l2-setup-logs-read").stdout.split("\n")) {
+      if (!raw.trim()) continue
+      for (const rec of JSON.parse(raw).records ?? [])
+        if (rec.kind === "output" && rec.text)
+          for (const line of rec.text.replace(/\n$/, "").split("\n"))
+            expected.set(line, (expected.get(line) ?? 0) + 1)
+    }
+    expect(expected.size).toBeGreaterThan(0)
+    for (const [line, count] of expected)
+      expect(texts.filter((t) => t === line).length, line).toBe(count)
+  })
+
   it("adds and initialises the docker provider on first use", async () => {
     const script = baseScript()
       .set("provider list", inline("{}"))
