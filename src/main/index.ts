@@ -12,6 +12,12 @@ import { registerIpc } from "./ipc.js"
 import { LogStore } from "./log-store.js"
 import { SettingsStore } from "./settings-store.js"
 
+// Tests run against a throwaway profile (settings, logs, Chromium caches) so
+// they never touch the user's real one. Must happen before the app is ready.
+if (process.env.SH_USER_DATA_DIR) {
+  app.setPath("userData", process.env.SH_USER_DATA_DIR)
+}
+
 let mainWindow: BrowserWindow | null = null
 let runner: CliRunner | null = null
 let environments: EnvironmentService | null = null

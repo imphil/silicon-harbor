@@ -1,7 +1,8 @@
 /**
- * Smoke tests against the real preload bridge and main process. Until M1/M2
- * implement the environment and requirement handlers, the UI must degrade
- * gracefully (clear messages, no console errors).
+ * Smoke tests against the real preload bridge and main process (M1 backend,
+ * throwaway profile and Devsy home). Requirements (M2) are not implemented
+ * yet, so the UI must degrade gracefully there (clear messages, no console
+ * errors).
  */
 import { expect, test } from "@playwright/test"
 import { type LaunchedApp, launch } from "./app"
@@ -9,7 +10,8 @@ import { type LaunchedApp, launch } from "./app"
 let launched: LaunchedApp
 
 test.beforeAll(async () => {
-  launched = await launch()
+  // Past first run, so the main navigation is visible.
+  launched = await launch({ settings: { firstRunDone: true } })
 })
 
 test.afterAll(async () => {
@@ -29,7 +31,20 @@ test("renders the dark Carbon header with both navigation items", async () => {
   await expect(nav.getByRole("menuitem", { name: "Settings" })).toBeVisible()
 })
 
-test("shows the environments page even when the backend is not ready", async () => {
+test("starts with first-run setup on a fresh profile", async () => {
+  const fresh = await launch()
+  try {
+    await expect(fresh.page.locator("h1")).toHaveText(/Set up your machine/)
+    await expect(
+      fresh.page.locator("header").getByRole("navigation", { name: "Main" }),
+    ).toHaveCount(0)
+    expect(fresh.consoleErrors).toEqual([])
+  } finally {
+    await fresh.app.close()
+  }
+})
+
+test("shows the environments page from the real backend", async () => {
   const { page } = launched
   await expect(page.locator("h1")).toHaveText("Environments")
   await expect(

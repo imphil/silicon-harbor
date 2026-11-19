@@ -30,8 +30,15 @@ Requires Node 24.
 ```sh
 npm install                 # also downloads the Electron binary (postinstall)
 npm run fetch-devsy         # Devsy CLI for this machine → resources/bin/<os>-<arch>/
-npm run dev                 # app with hot reload
+npm run dev                 # app with hot reload, real Devsy backend
+npm run dev:mock            # UI against the built-in mock backend (no Devsy, no Docker)
 ```
+
+The real backend uses `~/.silicon-harbor` as Devsy home. Override with
+`SH_DEVSY_HOME=/tmp/sh-dev` (keep it short: Devsy's unix sockets are limited to
+104 bytes) and the Electron profile with `SH_USER_DATA_DIR`. Mock scenarios:
+append `?mock=1&scenario=default|first-run|empty|all-ok&platform=mac|win|linux`
+to the renderer URL.
 
 Running from a terminal inside VS Code? Its extension host may export
 `ELECTRON_RUN_AS_NODE=1`, which makes Electron start as plain Node. Use

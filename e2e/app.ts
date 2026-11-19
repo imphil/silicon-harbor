@@ -1,4 +1,6 @@
-import { dirname, resolve } from "node:path"
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { ElectronApplication, Page } from "@playwright/test"
 import { _electron as electron } from "@playwright/test"
@@ -13,15 +15,42 @@ export interface LaunchedApp {
   base: string
 }
 
+export interface LaunchOptions {
+  /** Pre-seeded settings.json content for the throwaway profile. */
+  settings?: Record<string, unknown>
+}
+
 /**
  * Launches the built app (run `npm run build` first) from the repository root
  * so package.json "main" and app.getAppPath() behave like a real start.
+ *
+ * Every launch gets a throwaway Electron profile and a throwaway Devsy home
+ * (short /tmp path: Devsy's unix sockets are limited to 104 bytes), removed
+ * again when the app closes. Tests never touch ~/.config or ~/.silicon-harbor.
  */
-export async function launch(): Promise<LaunchedApp> {
-  const env = { ...process.env }
+export async function launch(
+  options: LaunchOptions = {},
+): Promise<LaunchedApp> {
+  const userData = mkdtempSync(join(tmpdir(), "sh-e2e-profile-"))
+  const devsyHome = mkdtempSync("/tmp/sh-e2e-")
+  if (options.settings) {
+    writeFileSync(
+      join(userData, "settings.json"),
+      JSON.stringify(options.settings),
+    )
+  }
+  const env = {
+    ...process.env,
+    SH_USER_DATA_DIR: userData,
+    SH_DEVSY_HOME: devsyHome,
+  }
   // VS Code's extension host sets this; it would start Electron as plain Node.
   delete env.ELECTRON_RUN_AS_NODE
   const app = await electron.launch({ args: [ROOT], env })
+  app.on("close", () => {
+    rmSync(userData, { recursive: true, force: true })
+    rmSync(devsyHome, { recursive: true, force: true })
+  })
   const page = await app.firstWindow()
   const consoleErrors: string[] = []
   page.on("console", (msg) => {
