@@ -79,10 +79,20 @@ export function terminalCommands(input: TerminalInput): TerminalCommand[] {
     ]
   }
 
-  const argv = [input.devsyPath, ...sshArgs]
+  return linuxTerminalCommands(
+    [input.devsyPath, ...sshArgs],
+    input.preferredTerminal,
+  )
+}
+
+/** Linux terminals that run argv in a new window, in order of preference. */
+export function linuxTerminalCommands(
+  argv: string[],
+  preferredTerminal?: string,
+): TerminalCommand[] {
   const candidates: TerminalCommand[] = []
-  if (input.preferredTerminal)
-    candidates.push({ command: input.preferredTerminal, args: ["-e", ...argv] })
+  if (preferredTerminal)
+    candidates.push({ command: preferredTerminal, args: ["-e", ...argv] })
   candidates.push(
     // Fedora's default terminal since Fedora 41
     { command: "ptyxis", args: ["--new-window", "--", ...argv] },
@@ -95,9 +105,14 @@ export function terminalCommands(input: TerminalInput): TerminalCommand[] {
 }
 
 /** Starts the first candidate that exists. */
-export async function openTerminal(input: TerminalInput): Promise<void> {
+export function openTerminal(input: TerminalInput): Promise<void> {
+  return startFirst(terminalCommands(input))
+}
+
+/** Starts the first of the candidates that exists, detached. */
+export async function startFirst(candidates: TerminalCommand[]): Promise<void> {
   const tried: string[] = []
-  for (const candidate of terminalCommands(input)) {
+  for (const candidate of candidates) {
     tried.push(candidate.command)
     const started = await new Promise<boolean>((resolve) => {
       const child = spawn(candidate.command, candidate.args, {

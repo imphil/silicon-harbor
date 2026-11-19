@@ -192,6 +192,22 @@ function requirementsFor(
             detail: "Running.",
           },
       icr,
+      firstRun
+        ? {
+            id: "git-credentials",
+            title: "GitHub CLI",
+            state: "warn",
+            version: "2.83.0",
+            detail: "Not signed in to github.ibm.com yet.",
+            fix: { label: "Sign in" },
+          }
+        : {
+            id: "git-credentials",
+            title: "GitHub CLI",
+            state: "ok",
+            version: "2.83.0",
+            detail: "Signs Git in to github.ibm.com over HTTPS.",
+          },
       {
         id: "ide",
         title: "IDE",
@@ -261,6 +277,7 @@ const FIXED_DETAIL: Partial<Record<RequirementId, string>> = {
   "container-engine": "Running with dockerd (moby).",
   xquartz: "Installed. Log out and back in once to finish.",
   "credential-helper": "Signs in to icr.io with your IBM Cloud login.",
+  "git-credentials": "Signs Git in to github.ibm.com over HTTPS.",
 }
 
 /**

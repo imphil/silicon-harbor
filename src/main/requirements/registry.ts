@@ -1,6 +1,10 @@
 import { linuxDocker, rancherDesktop } from "./container-engine"
 import { credentialHelper } from "./credential-helper"
-import { gitCredentialsMac, gitCredentialsWindows } from "./git-credentials"
+import {
+  gitCredentialsLinux,
+  gitCredentialsMac,
+  gitCredentialsWindows,
+} from "./git-credentials"
 import { ide } from "./ide"
 import type { Requirement } from "./types"
 import { wsl } from "./wsl"
@@ -14,7 +18,7 @@ export function requirementsFor(platform: NodeJS.Platform): Requirement[] {
     case "win32":
       return [wsl, rancherDesktop, credentialHelper, gitCredentialsWindows, ide]
     default:
-      // Linux (Fedora is the supported distribution): no GCM check.
-      return [linuxDocker, credentialHelper, ide]
+      // Linux (Fedora is the supported distribution).
+      return [linuxDocker, credentialHelper, gitCredentialsLinux, ide]
   }
 }

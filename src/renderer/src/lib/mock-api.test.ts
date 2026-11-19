@@ -38,7 +38,11 @@ describe("createMockApi", () => {
     const pending = api.checkRequirements()
     await vi.runAllTimersAsync()
     const reqs = await pending
-    expect(reqs.map((r) => r.id)).not.toContain("git-credentials")
+    // Fedora: Git sign-in through the GitHub CLI.
+    expect(reqs.find((r) => r.id === "git-credentials")).toMatchObject({
+      title: "GitHub CLI",
+      fix: { label: "Sign in" },
+    })
     expect(reqs.filter((r) => r.state !== "ok").length).toBeGreaterThan(0)
   })
 

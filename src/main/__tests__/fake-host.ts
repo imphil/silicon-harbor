@@ -57,6 +57,10 @@ export class FakeHost implements Host {
   writes: Array<{ path: string; content: string }> = []
   copies: Array<{ src: string; dest: string }> = []
   opened: string[] = []
+  /** argv of every openTerminal call. */
+  terminals: string[][] = []
+  /** Side effect of opening a terminal, e.g. the user signing in there. */
+  onTerminal?: (argv: string[]) => void
   removed: string[] = []
   private tempCount = 0
 
@@ -151,6 +155,11 @@ export class FakeHost implements Host {
 
   async openExternal(url: string) {
     this.opened.push(url)
+  }
+
+  async openTerminal(argv: string[]) {
+    this.terminals.push(argv)
+    this.onTerminal?.(argv)
   }
 }
 

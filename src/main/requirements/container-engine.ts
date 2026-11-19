@@ -265,7 +265,7 @@ export const rancherDesktop: Requirement = {
 /** Linux user names we pass to usermod (defensive: no shell metacharacters). */
 const USER_NAME = /^[a-z_][a-z0-9_.-]{0,31}\$?$/i
 
-async function isFedora(host: Host): Promise<boolean> {
+export async function isFedora(host: Host): Promise<boolean> {
   const text = await host.readText("/etc/os-release")
   if (!text) return false
   const id = /^ID="?([^"\n]*)"?/m.exec(text)?.[1] ?? ""

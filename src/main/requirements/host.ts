@@ -13,6 +13,7 @@ import {
 } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { delimiter, dirname, join } from "node:path"
+import { linuxTerminalCommands, startFirst } from "../terminal"
 import { elevatedCommand } from "./elevate"
 
 /**
@@ -63,6 +64,11 @@ export interface Host {
   tempDir(prefix: string): Promise<string>
   remove(path: string): Promise<void>
   openExternal(url: string): Promise<void>
+  /**
+   * Runs argv in a new terminal window (Linux), for interactive steps such as
+   * `gh auth login`. Returns once the window was started.
+   */
+  openTerminal(argv: string[]): Promise<void>
 }
 
 const MAX_OUTPUT = 1024 * 1024
@@ -219,6 +225,11 @@ export class NodeHost implements Host {
       }
     }
     return null
+  }
+
+  async openTerminal(argv: string[]) {
+    this.options.log?.(`terminal: ${argv.join(" ")}`)
+    await startFirst(linuxTerminalCommands(argv, this.env.TERMINAL))
   }
 
   async exists(path: string) {
