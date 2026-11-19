@@ -289,6 +289,7 @@ documented; all spikes green or with a written workaround.
   (github.ibm.com repo + icr.io + IDEs + X11) on those machines; app icons.
 
 ### M1 + M3 status (2026-11-19)
+
 - M1 engine done (`docs/engine.md`): CLI runner with allow-listed env + `LC_ALL=C`, docker provider bootstrap,
   detached up/stop/delete/cancel with re-attach, five-step progress, status polling + file watch, per-environment
   logs, error catalog, settings, diagnostics, open IDE/terminal. Opt-in Docker integration test passed locally.
@@ -299,6 +300,20 @@ documented; all spikes green or with a written workaround.
   macOS/Windows; Check-for-updates disabled; contract wishes from M3 — `copyDiagnostics` should report what was
   copied, and a way to dismiss a failed create without deleting it.
 - Risk noted: proxy variables with embedded credentials are passed to Devsy and end up in its task state.
+
+### M2 status (2026-11-19)
+
+- Requirements implemented (`docs/requirements.md`): Rancher Desktop (macOS/Windows), Docker Engine / Fedora
+  `moby-engine` + docker group, WSL 2, XQuartz, docker-credential-icr + Docker config merge, Git Credential Manager
+  (macOS) / Git for Windows, IDE detection. Checks run at start and on demand; fixes via the OS prompt; pending
+  re-login/reboot remembered.
+- Installer manifest with real versions and sha256 from GitHub release metadata: Rancher Desktop 1.25.0,
+  XQuartz 2.8.6, GCM 3.0.2, Git for Windows 2.56.1. **docker-credential-icr has no published release** → no
+  automatic install yet (installer refuses; the check says to put it on PATH).
+- Verified here: unit tests with fakes for all three platforms; read-only checks on this Linux machine (Docker ok,
+  credential helper missing, VS Code found). Not verified: any real fix/installer — needs the macOS, Windows and
+  Fedora test machines.
+- `$DEVSY_HOME/bin` is now on the Devsy CLI's PATH (for docker-credential-icr).
 
 ### M1 — Engine integration (weeks 3–4, Track A)
 
