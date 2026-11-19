@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "updated": "2026-11-19",
+  "items": {
+    "rancher-desktop": {
+      "name": "Rancher Desktop",
+      "version": "1.25.0",
+      "homepage": "https://rancherdesktop.io/",
+      "assets": {
+        "darwin-arm64": {
+          "kind": "dmg",
+          "url": "https://github.com/rancher-sandbox/rancher-desktop/releases/download/v1.25.0/Rancher.Desktop-1.25.0.aarch64.dmg",
+          "sha256": "17b93863838fc3860d4adb0fa58a76a283011c3ea8743205b306e23f5282c671",
+          "appName": "Rancher Desktop.app"
+        },
+        "darwin-x64": {
+          "kind": "dmg",
+          "url": "https://github.com/rancher-sandbox/rancher-desktop/releases/download/v1.25.0/Rancher.Desktop-1.25.0.x86_64.dmg",
+          "sha256": "859c6384ac33e8c1ddc0f37eb8e0ed26cdd977d6ac0a58b9235e7a2a4c33080b",
+          "appName": "Rancher Desktop.app"
+        },
+        "win32-x64": {
+          "kind": "msi",
+          "url": "https://github.com/rancher-sandbox/rancher-desktop/releases/download/v1.25.0/Rancher.Desktop.Setup.1.25.0.msi",
+          "sha256": "8e8a703cafc101495bfc9aecc515a91f9c781e572c39d93698bfa96655ec21f8"
+        }
+      }
+    },
+    "xquartz": {
+      "name": "XQuartz",
+      "version": "2.8.6",
+      "homepage": "https://www.xquartz.org/",
+      "assets": {
+        "darwin-arm64": {
+          "kind": "pkg",
+          "url": "https://github.com/XQuartz/XQuartz/releases/download/XQuartz-2.8.6/XQuartz-2.8.6.pkg",
+          "sha256": "9ac35a505095bfbd3009c3b4772f0c6421e2f79c4210ab908459270d1c447909"
+        },
+        "darwin-x64": {
+          "kind": "pkg",
+          "url": "https://github.com/XQuartz/XQuartz/releases/download/XQuartz-2.8.6/XQuartz-2.8.6.pkg",
+          "sha256": "9ac35a505095bfbd3009c3b4772f0c6421e2f79c4210ab908459270d1c447909"
+        }
+      }
+    },
+    "git-credential-manager": {
+      "name": "Git Credential Manager",
+      "version": "3.0.2",
+      "homepage": "https://github.com/git-ecosystem/git-credential-manager",
+      "assets": {
+        "darwin-arm64": {
+          "kind": "pkg",
+          "url": "https://github.com/git-ecosystem/git-credential-manager/releases/download/v3.0.2/gcm-osx-arm64-3.0.2.pkg",
+          "sha256": "4391c392785e0087a5b120c23c4ffa1c4aa4aed1e15c6ded084db4e1f8baa398"
+        },
+        "darwin-x64": {
+          "kind": "pkg",
+          "url": "https://github.com/git-ecosystem/git-credential-manager/releases/download/v3.0.2/gcm-osx-x64-3.0.2.pkg",
+          "sha256": "e12385440bfd9a8fadc5b1f2174b3c21017923acc2e48a30b953ef023e1625e2"
+        }
+      }
+    },
+    "git-for-windows": {
+      "name": "Git for Windows",
+      "version": "2.56.1",
+      "homepage": "https://gitforwindows.org/",
+      "assets": {
+        "win32-x64": {
+          "kind": "inno",
+          "url": "https://github.com/git-for-windows/git/releases/download/v2.56.1.windows.1/Git-2.56.1-64-bit.exe",
+          "sha256": "c330c72e10b408cc39994bfefdb63542b0d93d21699325c3e0bd874af8a5a559"
+        }
+      }
+    },
+    "docker-credential-icr": {
+      "name": "docker-credential-icr",
+      "version": null,
+      "homepage": "https://github.com/imphil/docker-credential-icr",
+      "todo": "TODO: github.com/imphil/docker-credential-icr has no published release yet (checked 2026-11-19). Add url + sha256 per target once release binaries exist; until then the installer refuses to run.",
+      "assets": {}
+    }
+  }
+}
