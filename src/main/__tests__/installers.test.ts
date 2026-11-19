@@ -10,7 +10,12 @@ import {
   type FetchLike,
 } from "../installers/download"
 import { InstallError, runInstaller } from "../installers/install"
-import { findAsset, loadManifest, ManifestSchema } from "../installers/manifest"
+import {
+  AssetSchema,
+  findAsset,
+  loadManifest,
+  ManifestSchema,
+} from "../installers/manifest"
 import {
   appleScriptString,
   elevatedCommand,
@@ -40,7 +45,18 @@ describe("manifest", () => {
   })
 
   it("refuses items without a published release or checksum", () => {
-    const icr = findAsset(manifest, "docker-credential-icr", "linux", "x64")
+    const unreleased = ManifestSchema.parse({
+      ...manifest,
+      items: {
+        ...manifest.items,
+        "docker-credential-icr": {
+          ...manifest.items["docker-credential-icr"],
+          version: null,
+          assets: {},
+        },
+      },
+    })
+    const icr = findAsset(unreleased, "docker-credential-icr", "linux", "x64")
     expect(icr.ok).toBe(false)
     if (!icr.ok) expect(icr.reason).toMatch(/cannot be installed automatically/)
 
@@ -165,6 +181,64 @@ describe("downloadVerified", () => {
 describe("runInstaller", () => {
   const url = "https://example.com/x"
   const sha256 = "a".repeat(64)
+
+  it("unpacks a binary from an archive with tar and cleans up", async () => {
+    const host = new FakeHost({ platform: "linux" })
+    host.commands.tar = (args) => {
+      // tar -xf <archive> -C <dir> <member>
+      host.files[`${args[3]}/${args[4]}`] = "binary"
+      return ok()
+    }
+    await runInstaller({
+      host,
+      asset: {
+        kind: "binary",
+        url,
+        sha256,
+        archive: "tar.gz",
+        member: "docker-credential-icr",
+      },
+      file: "/tmp/dl/icr.tar.gz",
+      name: "docker-credential-icr",
+      binaryDest: "/home/dev/.local/bin/docker-credential-icr",
+    })
+    expect(host.runs).toEqual([
+      "tar -xf /tmp/dl/icr.tar.gz -C /tmp/sh-extract-1 docker-credential-icr",
+    ])
+    expect(host.copies).toEqual([
+      {
+        src: "/tmp/sh-extract-1/docker-credential-icr",
+        dest: "/home/dev/.local/bin/docker-credential-icr",
+      },
+    ])
+    expect(host.removed).toEqual(["/tmp/sh-extract-1"])
+  })
+
+  it("fails clearly when the archive does not contain the binary", async () => {
+    const host = new FakeHost({ platform: "linux", commands: { tar: ok() } })
+    await expect(
+      runInstaller({
+        host,
+        asset: { kind: "binary", url, sha256, archive: "zip", member: "x.exe" },
+        file: "/tmp/dl/x.zip",
+        name: "docker-credential-icr",
+        binaryDest: "/home/dev/bin/x.exe",
+      }),
+    ).rejects.toThrow(/x\.exe not found in the download/)
+    expect(host.removed).toEqual(["/tmp/sh-extract-1"])
+  })
+
+  it("rejects archive members that are paths", () => {
+    expect(() =>
+      AssetSchema.parse({
+        kind: "binary",
+        url,
+        sha256,
+        archive: "tar.gz",
+        member: "../evil",
+      }),
+    ).toThrow()
+  })
 
   it("installs a macOS pkg with administrator rights", async () => {
     const host = new FakeHost({ platform: "darwin" })

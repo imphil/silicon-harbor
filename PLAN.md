@@ -308,8 +308,8 @@ documented; all spikes green or with a written workaround.
   (macOS) / Git for Windows, IDE detection. Checks run at start and on demand; fixes via the OS prompt; pending
   re-login/reboot remembered.
 - Installer manifest with real versions and sha256 from GitHub release metadata: Rancher Desktop 1.25.0,
-  XQuartz 2.8.6, GCM 3.0.2, Git for Windows 2.56.1. **docker-credential-icr has no published release** → no
-  automatic install yet (installer refuses; the check says to put it on PATH).
+  XQuartz 2.8.6, GCM 3.0.2, Git for Windows 2.56.1, docker-credential-icr 0.1.0 (archives, unpacked with the
+  system `tar`).
 - Verified here: unit tests with fakes for all three platforms; read-only checks on this Linux machine (Docker ok,
   credential helper missing, VS Code found). Not verified: any real fix/installer — needs the macOS, Windows and
   Fedora test machines.

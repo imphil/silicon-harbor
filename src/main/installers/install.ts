@@ -124,9 +124,49 @@ export async function runInstaller(input: InstallInput): Promise<void> {
     case "binary": {
       if (!input.binaryDest)
         throw new InstallError(`${name}: missing destination`)
+      if (asset.archive && asset.member) {
+        await installFromArchive(
+          host,
+          file,
+          asset.member,
+          input.binaryDest,
+          name,
+        )
+        return
+      }
       await host.copyFile(file, input.binaryDest)
       await host.makeExecutable(input.binaryDest)
       return
     }
+  }
+}
+
+/**
+ * Extracts one file from a verified archive and installs it. Uses the system
+ * tar: GNU tar / bsdtar on macOS and Linux (tar.gz), and Windows' built-in
+ * bsdtar (C:\\Windows\\System32\\tar.exe), which also reads zip.
+ */
+async function installFromArchive(
+  host: Host,
+  archive: string,
+  member: string,
+  dest: string,
+  name: string,
+): Promise<void> {
+  const dir = await host.tempDir("sh-extract-")
+  try {
+    check(
+      await host.run("tar", ["-xf", archive, "-C", dir, member], {
+        timeoutMs: 60_000,
+      }),
+      `Unpacking ${name}`,
+    )
+    const extracted = join(dir, member)
+    if (!(await host.exists(extracted)))
+      throw new InstallError(`${name}: ${member} not found in the download.`)
+    await host.copyFile(extracted, dest)
+    await host.makeExecutable(dest)
+  } finally {
+    await host.remove(dir)
   }
 }

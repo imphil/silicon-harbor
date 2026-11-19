@@ -74,10 +74,38 @@
     },
     "docker-credential-icr": {
       "name": "docker-credential-icr",
-      "version": null,
+      "version": "0.1.0",
       "homepage": "https://github.com/imphil/docker-credential-icr",
-      "todo": "TODO: github.com/imphil/docker-credential-icr has no published release yet (checked 2026-11-19). Add url + sha256 per target once release binaries exist; until then the installer refuses to run.",
-      "assets": {}
+      "assets": {
+        "darwin-arm64": {
+          "kind": "binary",
+          "url": "https://github.com/imphil/docker-credential-icr/releases/download/v0.1.0/docker-credential-icr-0.1.0-aarch64-apple-darwin.tar.gz",
+          "sha256": "120826bb6f8b946dd124797c6add1f09ee687a10cc4f588429dff63ec12c704d",
+          "archive": "tar.gz",
+          "member": "docker-credential-icr"
+        },
+        "darwin-x64": {
+          "kind": "binary",
+          "url": "https://github.com/imphil/docker-credential-icr/releases/download/v0.1.0/docker-credential-icr-0.1.0-x86_64-apple-darwin.tar.gz",
+          "sha256": "55eeaeacbbf24785ed046150c9e2280e990673b2a3ca47951a62d9800d05e272",
+          "archive": "tar.gz",
+          "member": "docker-credential-icr"
+        },
+        "win32-x64": {
+          "kind": "binary",
+          "url": "https://github.com/imphil/docker-credential-icr/releases/download/v0.1.0/docker-credential-icr-0.1.0-x86_64-pc-windows-msvc.zip",
+          "sha256": "1084a7b563e2382a948db50a00948fd93c9db39b388e1e06f6049e9c8e19686d",
+          "archive": "zip",
+          "member": "docker-credential-icr.exe"
+        },
+        "linux-x64": {
+          "kind": "binary",
+          "url": "https://github.com/imphil/docker-credential-icr/releases/download/v0.1.0/docker-credential-icr-0.1.0-x86_64-unknown-linux-gnu.tar.gz",
+          "sha256": "d5f896d990c87b3057d43debef614c36f253be255da034a21443d4c73217336e",
+          "archive": "tar.gz",
+          "member": "docker-credential-icr"
+        }
+      }
     }
   }
 }

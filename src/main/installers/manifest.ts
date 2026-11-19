@@ -38,8 +38,22 @@ export const AssetSchema = z
     sha256: Sha256Schema.nullable(),
     /** dmg only: the .app inside the image. */
     appName: z.string().optional(),
+    /** binary only: the download is an archive containing the binary. */
+    archive: z.enum(["tar.gz", "zip"]).optional(),
+    /** binary in an archive: file name of the binary inside it (no paths). */
+    member: z
+      .string()
+      .regex(/^[A-Za-z0-9._-]+$/, "member must be a plain file name")
+      .refine((m) => m !== "." && m !== "..")
+      .optional(),
   })
   .strict()
+  .refine((a) => (a.archive === undefined) === (a.member === undefined), {
+    message: "archive and member must be set together",
+  })
+  .refine((a) => a.archive === undefined || a.kind === "binary", {
+    message: "archive is only valid for kind binary",
+  })
 export type Asset = z.infer<typeof AssetSchema>
 
 const ItemSchema = z

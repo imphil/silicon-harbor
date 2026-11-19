@@ -427,9 +427,31 @@ describe("credential helper", () => {
     },
   })
 
-  it("explains that it cannot be installed while no release exists", async () => {
+  it("offers the install for the pinned release", async () => {
     const host = new FakeHost({ platform: "linux" })
     const status = await credentialHelper.check(fakeContext(host))
+    expect(status).toMatchObject({
+      state: "missing",
+      fix: { label: "Install" },
+    })
+  })
+
+  it("explains that it cannot be installed while no release exists", async () => {
+    const host = new FakeHost({ platform: "linux" })
+    const unreleased = ManifestSchema.parse({
+      ...loadManifest(),
+      items: {
+        ...loadManifest().items,
+        "docker-credential-icr": {
+          ...loadManifest().items["docker-credential-icr"],
+          version: null,
+          assets: {},
+        },
+      },
+    })
+    const status = await credentialHelper.check(
+      fakeContext(host, { manifest: unreleased }),
+    )
     expect(status.state).toBe("missing")
     expect(status.fix).toBeUndefined()
     expect(status.detail).toMatch(/cannot be installed automatically yet/)
