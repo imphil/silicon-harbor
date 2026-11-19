@@ -3,12 +3,24 @@ name: build
 # Everything runs on Linux: checks, tests and packaging for macOS, Windows and
 # Fedora. See docs/spikes/packaging.md for why this works without macOS or
 # Windows runners.
+#
+# - push to main, pull requests: check + package, packages as run artifacts
+# - tag v*: the same, then a draft GitHub release with the packages attached
+#   (publish it by hand after a look)
 
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   # carbon-components-svelte and @ibm/plex run IBM telemetry in postinstall.
@@ -18,10 +30,11 @@ env:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
           cache: npm
@@ -30,38 +43,55 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run build
-      - name: Electron smoke test
+      # Ubuntu 24.04 blocks unprivileged user namespaces through AppArmor,
+      # which Chromium's sandbox needs; Electron would abort at start.
+      - name: Allow user namespaces for the Electron sandbox
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Electron end-to-end tests
         run: xvfb-run -a npm run test:e2e
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: failure()
+        with:
+          name: e2e-results
+          path: test-results/
+          if-no-files-found: ignore
 
   package:
     needs: check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         target: [mac, win, linux]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 24
           cache: npm
       - run: npm ci
+
+      # Pinned Devsy binaries (~160 MB each); fetch-devsy verifies the
+      # sha256 of cached files too.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/devsy
+          key: devsy-${{ matrix.target }}-${{ hashFiles('resources/devsy/devsy.json') }}
 
       - name: Install rcodesign (macOS ad-hoc signing)
         if: matrix.target == 'mac'
         run: |
           set -euo pipefail
           name="apple-codesign-${RCODESIGN_VERSION}-x86_64-unknown-linux-musl"
-          curl -fsSL -o /tmp/rcodesign.tar.gz \
+          curl -fsSL -o "$RUNNER_TEMP/rcodesign.tar.gz" \
             "https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F${RCODESIGN_VERSION}/${name}.tar.gz"
-          echo "${RCODESIGN_SHA256}  /tmp/rcodesign.tar.gz" | sha256sum -c -
-          tar -xzf /tmp/rcodesign.tar.gz -C /tmp
-          echo "RCODESIGN=/tmp/${name}/rcodesign" >> "$GITHUB_ENV"
+          echo "${RCODESIGN_SHA256}  $RUNNER_TEMP/rcodesign.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/rcodesign.tar.gz" -C "$RUNNER_TEMP"
+          echo "RCODESIGN=$RUNNER_TEMP/${name}/rcodesign" >> "$GITHUB_ENV"
 
       # electron-builder runs the 32-bit NSIS stub under Wine to generate the
-      # uninstaller, even with signAndEditExecutable: false. Not yet verified
-      # on a runner; alternative: run this step in electronuserland/builder:wine.
+      # uninstaller, even with signAndEditExecutable: false.
       - name: Install Wine (NSIS uninstaller generation)
         if: matrix.target == 'win'
         run: |
@@ -73,9 +103,10 @@ jobs:
         if: matrix.target == 'linux'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends rpm
 
-      - run: npm run package:${{ matrix.target }}
+      # Releases are made by the release job below, never by electron-builder.
+      - run: npm run package:${{ matrix.target }} -- --publish never
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: silicon-harbor-${{ matrix.target }}
           path: |
@@ -83,3 +114,35 @@ jobs:
             release/*.exe
             release/*.rpm
           if-no-files-found: error
+          compression-level: 0
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Tag matches package.json version
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          test "v${version}" = "${GITHUB_REF_NAME}" || {
+            echo "::error::tag ${GITHUB_REF_NAME} does not match package.json version ${version}"
+            exit 1
+          }
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: silicon-harbor-*
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum -- * | tee SHA256SUMS
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
+        with:
+          draft: true
+          generate_release_notes: true
+          files: dist/*
+          fail_on_unmatched_files: true

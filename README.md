@@ -73,8 +73,9 @@ npm run package:linux                                # Fedora RPM, x64 — needs
 ```
 
 Output goes to `release/`. Tool requirements and caveats are in
-[docs/spikes/packaging.md](docs/spikes/packaging.md). CI runs the same commands
-on ubuntu runners: [.github/workflows/build.yml](.github/workflows/build.yml).
+[docs/spikes/packaging.md](docs/spikes/packaging.md). GitHub Actions runs the same
+commands on ubuntu runners and builds a draft release for `v*` tags:
+[.github/workflows/build.yml](.github/workflows/build.yml).
 
 To update Devsy: tag a release in [imphil/devsy](https://github.com/imphil/devsy),
 change `version` in `resources/devsy/devsy.json`, put each asset's SHA-256 there

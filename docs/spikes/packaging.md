@@ -85,9 +85,17 @@ No step compiles native code: there are no native Node modules, the Devsy CLI is
 
 ## CI
 
-`.github/workflows/build.yml` (ubuntu runners only):
-- `check` job: lint, svelte-check + tsc, Vitest, build, Playwright smoke test under Xvfb.
+`.github/workflows/build.yml` on GitHub Actions
+([imphil/silicon-harbor](https://github.com/imphil/silicon-harbor)), ubuntu-24.04
+runners only:
+- `check` job: lint, svelte-check + tsc, Vitest, build, Playwright e2e under Xvfb
+  (after allowing unprivileged user namespaces, which Ubuntu 24.04 blocks and
+  Chromium's sandbox needs).
 - `package` job, a matrix over mac/win/linux: installs rcodesign (checksum-verified) /
-  Wine / rpm as needed, runs `npm run package:<target>`, and uploads `release/*`.
+  Wine / rpm as needed, runs `npm run package:<target> -- --publish never`, and
+  uploads the package as a run artifact. Devsy downloads are cached per pin.
+- `release` job, only for `v*` tags: checks that the tag matches
+  `package.json`'s version, then creates a **draft** GitHub release with the
+  three packages and a `SHA256SUMS` file. Publish it by hand.
 
-It hasn't been run yet, because the repository location is still open.
+To release: bump `version` in `package.json`, commit, tag `v<version>`, push the tag.
