@@ -1,68 +1,74 @@
 <script lang="ts">
+import type { Environment } from "$shared/api"
 import {
   Button,
   DataTable,
-  EmptyState,
+  DataTableSkeleton,
+  InlineNotification,
   OverflowMenu,
   OverflowMenuItem,
-  Tag,
-  Toggle,
+  Toolbar,
+  ToolbarContent,
+  ToolbarSearch,
 } from "carbon-components-svelte"
 import type { DataTableHeader } from "carbon-components-svelte/src/DataTable/DataTable.svelte"
 import Add from "carbon-icons-svelte/lib/Add.svelte"
+import { push } from "svelte-spa-router"
+import DeleteEnvironmentModal from "../lib/components/DeleteEnvironmentModal.svelte"
+import IssueBar from "../lib/components/IssueBar.svelte"
 import NewEnvironmentModal from "../lib/components/NewEnvironmentModal.svelte"
+import StatusTag from "../lib/components/StatusTag.svelte"
+import { attempt, environments } from "../lib/stores"
+import { api } from "../lib/api"
+import {
+  ideLabel,
+  matchesSearch,
+  primaryAction,
+  relativeTime,
+  shortRepo,
+} from "../lib/view"
 
-type Status = "running" | "stopped" | "starting" | "error"
-type Row = {
-  id: string
-  name: string
-  repo: string
-  branch: string
-  ide: string
-  status: Status
-}
+let newOpen = $state(false)
+let deleting = $state<Environment | null>(null)
+let query = $state("")
 
-const statusTag: Record<
-  Status,
-  { label: string; type: "green" | "gray" | "blue" | "red" }
-> = {
-  running: { label: "Running", type: "green" },
-  stopped: { label: "Stopped", type: "gray" },
-  starting: { label: "Starting…", type: "blue" },
-  error: { label: "Problem", type: "red" },
-}
+// Re-render relative times once a minute.
+let now = $state(Date.now())
+$effect(() => {
+  const timer = setInterval(() => (now = Date.now()), 60_000)
+  return () => clearInterval(timer)
+})
 
-const headers: DataTableHeader<Row>[] = [
+const headers: DataTableHeader<Environment>[] = [
   { key: "name", value: "Name" },
   { key: "branch", value: "Branch" },
   { key: "ide", value: "IDE" },
-  { key: "status", value: "Status" },
-  { key: "actions", empty: true, value: "Actions" },
+  { key: "state", value: "Status" },
+  { key: "lastUsedAt", value: "Last used" },
+  { key: "actions", value: "Actions", empty: true },
 ]
 
-// Spike data until the Devsy integration (M1) provides real environments.
-const rows: Row[] = [
-  {
-    id: "core-rtl",
-    name: "core-rtl",
-    repo: "github.ibm.com/chipdev/core-rtl",
-    branch: "main",
-    ide: "VS Code",
-    status: "running" as Status,
-  },
-  {
-    id: "scan-flows",
-    name: "scan-flows",
-    repo: "github.ibm.com/dft/scan-flows",
-    branch: "feat/scan-compression",
-    ide: "IBM Bob",
-    status: "stopped" as Status,
-  },
-]
+const rows = $derived(
+  environments.list
+    .filter((e) => matchesSearch(e, query))
+    .sort((a, b) => (b.lastUsedAt ?? "").localeCompare(a.lastUsedAt ?? "")),
+)
 
-let showEmpty = $state(false)
-let newOpen = $state(false)
-let lastAction = $state("")
+const detailHref = (env: Environment) =>
+  `#/environments/${encodeURIComponent(env.id)}`
+
+function runPrimary(env: Environment): void {
+  const action = primaryAction(env)
+  if (action.kind === "open") void environments.openInIde(env.id)
+  else if (action.kind === "start") {
+    void environments.start(env.id)
+    void push(`/environments/${encodeURIComponent(env.id)}`)
+  } else void push(`/environments/${encodeURIComponent(env.id)}`)
+}
+
+function asEnv(row: unknown): Environment {
+  return row as Environment
+}
 </script>
 
 <div class="sh-page">
@@ -74,79 +80,140 @@ let lastAction = $state("")
     <Button icon={Add} on:click={() => (newOpen = true)}>New environment</Button>
   </div>
 
-  <div style="margin-bottom: 1rem">
-    <Toggle size="sm" labelText="Spike: show empty state" bind:toggled={showEmpty} />
-  </div>
+  <IssueBar />
 
-  {#if showEmpty}
-    <EmptyState
-      titleText="No environments yet"
-      subtitleText="Paste the URL of a Git repository on github.ibm.com. Silicon Harbor sets up everything it needs and opens it in your IDE."
-    >
+  {#if environments.loadError}
+    <InlineNotification
+      kind="error"
+      lowContrast
+      hideCloseButton
+      title="Could not load your environments."
+      subtitle={environments.loadError}
+    />
+  {:else if !environments.loaded}
+    <DataTableSkeleton
+      showHeader={false}
+      headers={["Name", "Branch", "IDE", "Status", "Last used", ""]}
+      rows={3}
+    />
+  {:else if environments.list.length === 0}
+    <div class="sh-empty" data-testid="empty-state">
+      <h2>No environments yet</h2>
+      <p class="sh-muted">
+        Paste the address of a Git repository on github.ibm.com. Silicon Harbor sets
+        up everything it needs and opens it in your IDE.
+      </p>
       <Button on:click={() => (newOpen = true)}>New environment</Button>
-    </EmptyState>
+    </div>
   {:else}
-    <DataTable {headers} {rows}>
+    <DataTable {headers} {rows} size="tall">
+      <Toolbar size="sm">
+        <ToolbarContent>
+          <ToolbarSearch
+            persistent
+            bind:value={query}
+            placeholder="Search environments"
+          />
+        </ToolbarContent>
+      </Toolbar>
       <svelte:fragment slot="cell" let:row let:cell>
+        {@const env = asEnv(row)}
         {#if cell.key === "name"}
-          <a href={`#/environments/${row.id}`}><strong>{row.name}</strong></a>
-          <div class="sh-muted" style="font-size: 0.75rem">{row.repo}</div>
+          <div class="sh-name">
+            <a href={detailHref(env)}><strong>{env.name}</strong></a>
+            <span class="sh-muted sh-small">{shortRepo(env.repoUrl)}</span>
+          </div>
         {:else if cell.key === "branch"}
-          <span class="sh-mono">{cell.value}</span>
-        {:else if cell.key === "status"}
-          <Tag type={statusTag[row.status as Status].type}>
-            {statusTag[row.status as Status].label}
-          </Tag>
+          <span class="sh-mono sh-small">{env.branch ?? "Default branch"}</span>
+        {:else if cell.key === "ide"}
+          {ideLabel(env.ide)}
+        {:else if cell.key === "state"}
+          <StatusTag {env} />
+        {:else if cell.key === "lastUsedAt"}
+          <span class="sh-muted">{relativeTime(env.lastUsedAt, now)}</span>
         {:else if cell.key === "actions"}
           <div class="sh-actions">
-            {#if row.status === "running"}
-              <Button
-                kind="tertiary"
-                size="small"
-                on:click={() => (lastAction = `open ${row.id}`)}
-              >
-                Open in {row.ide}
-              </Button>
-            {:else}
-              <Button
-                kind="tertiary"
-                size="small"
-                on:click={() => (lastAction = `start ${row.id}`)}
-              >
-                Start
-              </Button>
-            {/if}
-            <OverflowMenu flipped iconDescription={`More actions for ${row.name}`}>
-              <OverflowMenuItem text="Open terminal" />
-              <OverflowMenuItem text="Show log" href={`#/environments/${row.id}`} />
-              <OverflowMenuItem text="Stop" />
-              <OverflowMenuItem text="Rebuild" />
+            <Button kind="tertiary" size="small" on:click={() => runPrimary(env)}>
+              {primaryAction(env).label}
+            </Button>
+            <OverflowMenu flipped iconDescription={`More actions for ${env.name}`}>
+              <OverflowMenuItem
+                text="Open terminal"
+                disabled={env.state !== "running"}
+                on:click={() => environments.openTerminal(env.id)}
+              />
+              <OverflowMenuItem text="Show log" href={detailHref(env)} />
+              <OverflowMenuItem
+                text="Stop"
+                disabled={env.state !== "running"}
+                on:click={() => environments.stop(env.id)}
+              />
+              <OverflowMenuItem
+                text="Rebuild"
+                disabled={env.state === "busy"}
+                on:click={() => environments.rebuild(env.id)}
+              />
+              <OverflowMenuItem
+                text="Copy diagnostics"
+                on:click={() =>
+                  attempt("Could not copy diagnostics", () =>
+                    api().copyDiagnostics(env.id),
+                  )}
+              />
               <OverflowMenuItem
                 danger
                 hasDivider
                 text="Delete…"
-                on:click={() => (lastAction = `delete ${row.id}`)}
+                on:click={() => (deleting = env)}
               />
             </OverflowMenu>
           </div>
-        {:else}
-          {cell.value}
         {/if}
       </svelte:fragment>
     </DataTable>
-    {#if lastAction}
-      <p class="sh-muted" style="margin-top: 0.5rem">Last action: {lastAction}</p>
+    {#if rows.length === 0}
+      <p class="sh-muted sh-no-match">No environment matches “{query}”.</p>
     {/if}
   {/if}
 </div>
 
 <NewEnvironmentModal bind:open={newOpen} />
+<DeleteEnvironmentModal bind:env={deleting} />
 
 <style>
+  .sh-name {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+  .sh-small {
+    font-size: 0.75rem;
+  }
   .sh-actions {
     display: flex;
     justify-content: flex-end;
     align-items: center;
     gap: 0.25rem;
+    white-space: nowrap;
+  }
+  .sh-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 4rem 2rem;
+    background: var(--cds-layer-01, #f4f4f4);
+  }
+  .sh-empty h2 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 400;
+  }
+  .sh-empty p {
+    max-width: 30rem;
+    margin: 0;
+  }
+  .sh-no-match {
+    padding: 1rem;
   }
 </style>

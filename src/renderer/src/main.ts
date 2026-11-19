@@ -1,4 +1,4 @@
-import "carbon-components-svelte/css/white.css"
+import "carbon-components-svelte/css/all.css"
 import "./fonts.css"
 import "./app.css"
 import { mount } from "svelte"
