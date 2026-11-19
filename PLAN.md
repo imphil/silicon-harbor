@@ -279,13 +279,13 @@ documented; all spikes green or with a written workaround.
 ### M0 status (2026-11-19)
 
 - Devsy contract recorded: 43 fixture cases + `docs/devsy-contract.md`.
-- Daemon-socket fix written and tested; in our Devsy fork `imphil/devsy` (tagged v1.27.1-phw.2).
+- Daemon-socket fix written and tested; released in our Devsy fork `imphil/devsy` v1.27.1-phw.2.
 - Skeleton done: Electron + Svelte 5 + Carbon, typed IPC, lint/check/unit tests (11) and Playwright smoke tests (6)
   green. Carbon/Svelte 5 verdict: go (`docs/spikes/carbon-svelte5.md`).
 - Packaging from Linux (`docs/spikes/packaging.md`): macOS zip x64 + arm64 ad-hoc signed with rcodesign ✔, Fedora RPM ✔,
   Windows zip ✔. **Windows NSIS installer needs Wine** (electron-builder builds the uninstaller with it) — not yet
   verified; CI installs Wine on the ubuntu runner.
-- Devsy binaries pinned and fetched with sha256 check by `scripts/fetch-devsy.mjs`. Still pinned to upstream v1.27.1; switching to our fork `imphil/devsy` v1.27.1-phw.2 once its release build has published binaries (phw.1 has none: the macOS build was never picked up by a runner). Its CLI fetches the in-container agent from the fork's release too (`config.releaseRepo`).
+- Devsy binaries pinned and fetched with sha256 check by `scripts/fetch-devsy.mjs`. Source: our fork `imphil/devsy` v1.27.1-phw.2 (was upstream v1.27.1), checksums from the release's asset digests. (phw.1 has no binaries: its macOS build never got a runner.) Its CLI fetches the in-container agent from the fork's release too (`config.releaseRepo`).
 - Remaining M0: NSIS via Wine; first manual install on the macOS and Windows test machines; real-world spikes
   (github.ibm.com repo + icr.io + IDEs + X11) on those machines; app icons.
 

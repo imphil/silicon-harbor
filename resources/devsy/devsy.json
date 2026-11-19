@@ -1,22 +1,22 @@
 {
-  "version": "v1.27.1",
-  "baseUrl": "https://github.com/devsy-org/devsy/releases/download",
+  "version": "v1.27.1-phw.2",
+  "baseUrl": "https://github.com/imphil/devsy/releases/download",
   "binaries": {
     "mac-x64": {
       "asset": "devsy-darwin-amd64",
-      "sha256": "7fd018a8d0c556b0f3f30220c4da0b1053024f68760625de79cee0be56012179"
+      "sha256": "3c33c4a33478e5613eec2557fa540de4d4d4d774d10c2a70e483b454a26919cd"
     },
     "mac-arm64": {
       "asset": "devsy-darwin-arm64",
-      "sha256": "1fb576ce577210d8935c2f53c6e8005900ababf06cab404e17e4f242b1a70438"
+      "sha256": "9eb11c259215ee4790e841a4e45cb96302539717fd312ab8e37ae560d22a15e2"
     },
     "win-x64": {
       "asset": "devsy-windows-amd64.exe",
-      "sha256": "11e779c2561b47d7a185d8b4a2acfde42d13e1f03de41a8ccdd144d7ec654837"
+      "sha256": "9931b0dcbe196f86ed46065eaf462f2411f36900cf00ebe6f94618762116d4b1"
     },
     "linux-x64": {
       "asset": "devsy-linux-amd64",
-      "sha256": "2be0800ab69b8f53c67ff9e668364b332cd4aa5952a3d3a36d8914ddf7ebd541"
+      "sha256": "fc30bf9489ce444d64f9e41b8b694a728c180b7d440865f95f2dbdf2ce3815a4"
     }
   }
 }
