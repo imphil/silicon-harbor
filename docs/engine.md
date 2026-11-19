@@ -107,14 +107,22 @@ boundary is slow.
 - The helper container runs the nested `up`, including the repository's
   `initializeCommand` (there is no copy of the repository on the host to run
   it on). Like VS Code's "Clone Repository in Container Volume", which does
-  the same. From v1.27.1-phw.5 its image follows VS Code's recipe:
+  the same. Its image follows VS Code's recipe
+  (`cmd/internal/agentworkspace/bootstrap.Dockerfile` in the fork):
   `mcr.microsoft.com/devcontainers/base` Alpine (bash, git; pinned by digest)
   plus `git-lfs nodejs python3 npm make g++ docker-cli docker-cli-buildx
-  docker-cli-compose`. Devsy builds it locally on first use as
-  `devsy-volume-bootstrap:<hash>` (about 1 GB; needs `mcr.microsoft.com` and
-  the Alpine package mirror once), reported as "building the helper image".
-  Before phw.5 it was `docker:27-cli`, which has no bash, so `#!/bin/bash`
-  initialize scripts failed with "not found" (exit 127).
+  docker-cli-compose`. From v1.27.1-phw.6 the fork's release workflow
+  publishes it (amd64 + arm64, public) as
+  `ghcr.io/imphil/devsy-volume-bootstrap:<first 12 hex of the Dockerfile's
+  sha256>`; Devsy pulls it on first use ("downloading the helper image") and
+  only builds it locally if that fails. Before phw.5 it was `docker:27-cli`,
+  which has no bash, so `#!/bin/bash` initialize scripts failed with "not
+  found" (exit 127).
+- Setup output (lifecycle hooks such as `initializeCommand`, the image
+  build) reaches the CLI through the helper container from phw.6. Silicon
+  Harbor reads it every 3 s during an `up` (`devsy workspace logs --source
+  setup --run <id> --after <cursor>`; `--follow` can end before the run does)
+  and shows it in the Log tab as it arrives.
 - Not used on Fedora: Docker runs natively, and the host folder is fast and
   visible to host tools.
 
