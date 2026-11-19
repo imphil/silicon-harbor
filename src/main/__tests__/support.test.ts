@@ -63,6 +63,25 @@ describe("buildCliEnv", () => {
     expect(win.PATH).toBeUndefined()
   })
 
+  it("puts our own bin dir (docker-credential-icr) first on PATH", () => {
+    const linux = buildCliEnv({
+      hostEnv: { PATH: "/usr/bin" },
+      platform: "linux",
+      homeDir: "/home/u",
+      devsyHome: "/home/u/.silicon-harbor",
+      extraPathDirs: ["/home/u/.silicon-harbor/bin"],
+    })
+    expect(linux.PATH).toBe("/home/u/.silicon-harbor/bin:/usr/bin")
+    const win = buildCliEnv({
+      hostEnv: { Path: "C:\\Windows" },
+      platform: "win32",
+      homeDir: "C:\\Users\\u",
+      devsyHome: "C:\\Users\\u\\.silicon-harbor",
+      extraPathDirs: ["C:\\Users\\u\\.silicon-harbor\\bin"],
+    })
+    expect(win.Path).toBe("C:\\Users\\u\\.silicon-harbor\\bin;C:\\Windows")
+  })
+
   it("adds Rancher Desktop and Homebrew to PATH on macOS only", () => {
     const mac = executableSearchPath("/usr/bin:/bin", "darwin", "/Users/u")
     expect(mac.split(":").slice(0, 2)).toEqual([

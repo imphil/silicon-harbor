@@ -1,15 +1,22 @@
 import { existsSync, mkdirSync } from "node:fs"
-import { homedir } from "node:os"
+import { homedir, uptime, userInfo } from "node:os"
 import { join } from "node:path"
 import { app, BrowserWindow, clipboard, ipcMain, shell } from "electron"
 import { type AppInfo, IpcChannel } from "../shared/api.js"
 import { DevsyClient } from "./devsy/client.js"
-import { buildCliEnv, defaultDevsyHome } from "./devsy/env.js"
+import {
+  buildCliEnv,
+  defaultDevsyHome,
+  executableSearchPath,
+} from "./devsy/env.js"
 import { CliRunner } from "./devsy/runner.js"
 import { devsyBinaryPath } from "./devsy-path.js"
 import { EnvironmentService } from "./environments.js"
+import { loadManifest } from "./installers/manifest.js"
 import { registerIpc } from "./ipc.js"
 import { LogStore } from "./log-store.js"
+import { NodeHost } from "./requirements/host.js"
+import { RequirementService } from "./requirements/service.js"
 import { SettingsStore } from "./settings-store.js"
 
 // Tests run against a throwaway profile (settings, logs, Chromium caches) so
@@ -31,6 +38,8 @@ function broadcast(channel: string, payload: unknown): void {
 function startBackend(): void {
   const devsyHome = defaultDevsyHome(process.platform, homedir(), process.env)
   mkdirSync(devsyHome, { recursive: true })
+  // Our own tools (docker-credential-icr), on the Devsy CLI's PATH.
+  const binDir = join(devsyHome, "bin")
   const info = appInfo()
   runner = new CliRunner({
     // A missing binary surfaces as a failed operation with a clear message.
@@ -40,6 +49,7 @@ function startBackend(): void {
       platform: process.platform,
       homeDir: homedir(),
       devsyHome,
+      extraPathDirs: [binDir],
     }),
   })
   const client = new DevsyClient(runner)
@@ -55,6 +65,28 @@ function startBackend(): void {
     onChange: (envs) => broadcast(IpcChannel.evtEnvironments, envs),
     onLog: (id, line) => broadcast(IpcChannel.evtLog, { id, line }),
   })
+  const requirements = new RequirementService({
+    host: new NodeHost({
+      homeDir: homedir(),
+      userName: currentUserName(),
+      // GUI apps on macOS get a minimal PATH; find Homebrew/Rancher tools.
+      env: {
+        ...process.env,
+        PATH: executableSearchPath(
+          process.env.PATH ?? "",
+          process.platform,
+          homedir(),
+        ),
+      },
+      openExternal: (url) => shell.openExternal(url),
+    }),
+    manifest: loadManifest(),
+    binDir,
+    settings: () => settings.get(),
+    pendingFile: join(app.getPath("userData"), "requirements-pending.json"),
+    bootTime: () => Date.now() - uptime() * 1000,
+    onChange: (list) => broadcast(IpcChannel.evtRequirements, list),
+  })
   registerIpc({
     ipcMain,
     appInfo,
@@ -63,8 +95,18 @@ function startBackend(): void {
     client,
     devsyHome,
     writeClipboard: (text) => clipboard.writeText(text),
+    requirements,
   })
   void environments.start()
+  void requirements.check()
+}
+
+function currentUserName(): string {
+  try {
+    return userInfo().username
+  } catch {
+    return ""
+  }
 }
 
 function appInfo(): AppInfo {

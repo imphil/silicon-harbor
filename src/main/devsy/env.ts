@@ -72,6 +72,11 @@ export interface CliEnvInput {
   devsyHome: string
   /** Extra variables, e.g. for tests. Applied last. */
   extra?: Record<string, string>
+  /**
+   * Directories put in front of PATH, e.g. our own bin dir with
+   * docker-credential-icr (the docker CLI Devsy runs looks helpers up on PATH).
+   */
+  extraPathDirs?: string[]
 }
 
 export function buildCliEnv(input: CliEnvInput): NodeJS.ProcessEnv {
@@ -83,11 +88,15 @@ export function buildCliEnv(input: CliEnvInput): NodeJS.ProcessEnv {
 
   const pathKey =
     Object.keys(env).find((key) => key.toUpperCase() === "PATH") ?? "PATH"
-  env[pathKey] = executableSearchPath(
+  const searchPath = executableSearchPath(
     env[pathKey] ?? "",
     input.platform,
     input.homeDir,
   )
+  const separator = input.platform === "win32" ? ";" : ":"
+  env[pathKey] = [...(input.extraPathDirs ?? []), searchPath]
+    .filter((part) => part !== "")
+    .join(separator)
 
   // English, stable messages: our error catalog matches on them, and git's
   // messages are localized otherwise (docs/devsy-contract.md §5).

@@ -228,10 +228,35 @@ function requirementsFor(
   ]
 }
 
+// Wording after a fix, matching the real checks (src/main/requirements).
 const FIXED_DETAIL: Partial<Record<RequirementId, string>> = {
   "container-engine": "Running with dockerd (moby).",
   xquartz: "Installed. Log out and back in once to finish.",
-  "credential-helper": "Installed and set as credential helper for icr.io.",
+  "credential-helper": "Signs in to icr.io with your IBM Cloud login.",
+}
+
+/**
+ * Fixes that still block environments until the user logs in again stay a
+ * warning, as in the real backend (Linux docker group).
+ */
+function afterFix(
+  platform: MockPlatform,
+  req: RequirementStatus,
+): Pick<RequirementStatus, "state" | "detail"> {
+  if (platform === "linux" && req.id === "container-engine") {
+    return {
+      state: "warn",
+      detail: "Added to the docker group. Log out and back in once to finish.",
+    }
+  }
+  return {
+    state: "ok",
+    detail:
+      FIXED_DETAIL[req.id] ??
+      (req.fix?.needsRelogin
+        ? "Done. Log out and back in once to finish."
+        : "Done."),
+  }
 }
 
 function slug(name: string): string {
@@ -748,18 +773,7 @@ export function createMockApi(options: MockOptions = {}): SiliconHarborApi {
       emitReqs()
       await delay(1200)
       requirements = requirements.map((r) =>
-        r.id === id
-          ? {
-              ...r,
-              state: "ok",
-              detail:
-                FIXED_DETAIL[id] ??
-                (r.fix?.needsRelogin
-                  ? "Done. Log out and back in once to finish."
-                  : "Done."),
-              fix: undefined,
-            }
-          : r,
+        r.id === id ? { ...r, ...afterFix(platform, r), fix: undefined } : r,
       )
       emitReqs()
     },

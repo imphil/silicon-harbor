@@ -33,6 +33,7 @@ const environments = new EnvironmentService({
   onLog: () => {},
 })
 let clipboard = ""
+const fixed: string[] = []
 registerIpc({
   ipcMain: { handle: (channel, fn) => handlers.set(channel, fn) },
   appInfo: () => ({
@@ -48,6 +49,14 @@ registerIpc({
   devsyHome: "/tmp/sh-home",
   writeClipboard: (text) => {
     clipboard = text
+  },
+  requirements: {
+    check: async () => [
+      { id: "ide", title: "IDE", state: "ok", detail: "VSCodium" },
+    ],
+    fix: async (id) => {
+      fixed.push(id)
+    },
   },
 })
 
@@ -103,11 +112,14 @@ describe("IPC", () => {
     })
   })
 
-  it("has no requirements yet (M2)", async () => {
-    await expect(call(IpcChannel.reqCheck)).resolves.toEqual([])
-    await expect(call(IpcChannel.reqFix, "xquartz")).rejects.toThrow(
-      /not available yet/,
-    )
+  it("checks and fixes requirements, validating the id", async () => {
+    await expect(call(IpcChannel.reqCheck)).resolves.toEqual([
+      { id: "ide", title: "IDE", state: "ok", detail: "VSCodium" },
+    ])
+    await call(IpcChannel.reqFix, "xquartz")
+    expect(fixed).toEqual(["xquartz"])
+    await expect(call(IpcChannel.reqFix, "rm -rf /")).rejects.toThrow()
+    expect(fixed).toEqual(["xquartz"])
   })
 
   it("copies diagnostics to the clipboard", async () => {

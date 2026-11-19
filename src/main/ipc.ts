@@ -10,6 +10,7 @@ import type { DevsyClient } from "./devsy/client"
 import { WORKSPACE_ID_PATTERN } from "./devsy/ids"
 import { buildDiagnostics } from "./diagnostics"
 import type { EnvironmentService } from "./environments"
+import type { RequirementService } from "./requirements/service"
 import { IdeIdSchema, type SettingsStore } from "./settings-store"
 import { openTerminal } from "./terminal"
 
@@ -29,7 +30,17 @@ export interface IpcDeps {
   client: DevsyClient
   devsyHome: string
   writeClipboard(text: string): void
+  requirements: Pick<RequirementService, "check" | "fix">
 }
+
+const RequirementIdSchema = z.enum([
+  "container-engine",
+  "wsl",
+  "xquartz",
+  "credential-helper",
+  "git-credentials",
+  "ide",
+])
 
 const IdSchema = z.string().regex(WORKSPACE_ID_PATTERN)
 const CreateSchema = z
@@ -104,11 +115,13 @@ export function registerIpc(deps: IpcDeps): void {
     )
   })
 
-  // Requirements arrive with M2.
-  on(IpcChannel.reqCheck, (): RequirementStatus[] => [])
-  on(IpcChannel.reqFix, () => {
-    throw new Error("Fixing requirements is not available yet")
-  })
+  on(
+    IpcChannel.reqCheck,
+    (): Promise<RequirementStatus[]> => deps.requirements.check(),
+  )
+  on(IpcChannel.reqFix, (id) =>
+    deps.requirements.fix(RequirementIdSchema.parse(id)),
+  )
 
   on(IpcChannel.settingsGet, (): Settings => deps.settings.get())
   on(IpcChannel.settingsUpdate, (patch) => deps.settings.update(patch))

@@ -1,8 +1,7 @@
 /**
- * Smoke tests against the real preload bridge and main process (M1 backend,
- * throwaway profile and Devsy home). Requirements (M2) are not implemented
- * yet, so the UI must degrade gracefully there (clear messages, no console
- * errors).
+ * Smoke tests against the real preload bridge and main process (M1 + M2
+ * backend, throwaway profile and Devsy home). Requirement checks run for real
+ * on the test machine; they only read (fixes are never triggered here).
  */
 import { expect, test } from "@playwright/test"
 import { type LaunchedApp, launch } from "./app"
@@ -52,18 +51,18 @@ test("shows the environments page from the real backend", async () => {
   ).toBeVisible()
 })
 
-test("never claims the computer is ready without a check result", async () => {
+test("shows the real requirement check result in the header", async () => {
   const { page } = launched
-  // Until M2 implements the checks, the real backend rejects them.
-  await expect(page.getByTestId("health")).toHaveText(/Not checked|Ready|issue/)
-  const text = await page.getByTestId("health").textContent()
-  const checked = await page.evaluate(() =>
-    window.siliconHarbor
-      ?.checkRequirements()
-      .then(() => true)
-      .catch(() => false),
+  const reqs = await page.evaluate(() =>
+    window.siliconHarbor?.checkRequirements(),
   )
-  if (!checked) expect(text?.trim()).toBe("Not checked")
+  expect(reqs?.length).toBeGreaterThan(0)
+  const issues = (reqs ?? []).filter(
+    (r) => r.state === "missing" || r.state === "warn",
+  ).length
+  await expect(page.getByTestId("health")).toHaveText(
+    issues === 0 ? "Ready" : issues === 1 ? "1 issue" : `${issues} issues`,
+  )
 })
 
 test("reaches the main process over the typed IPC bridge", async () => {
