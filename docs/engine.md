@@ -84,7 +84,7 @@ operation. Setup output (`workspace logs --source setup --run <runId>`) is appen
 
 On macOS and Windows, new environments are created with `--clone-into-volume`
 (our Devsy fork). Devsy then clones the repository into a named Docker volume,
-using a short-lived `docker:27-cli` bootstrap container, instead of into a
+using a short-lived helper ("bootstrap") container, instead of into a
 folder on the host that is bind-mounted into the container. Docker runs in a VM
 on both platforms (Rancher Desktop, WSL 2), and file access across that
 boundary is slow.
@@ -99,11 +99,22 @@ boundary is slow.
   once no worktree is left.
 - Progress: the clone and container start run in a nested `up` inside the
   bootstrap container; the fork relays its phases (from v1.27.1-phw.2). From
-  v1.27.1-phw.4 the bootstrap preparation (volume, `docker:27-cli` pull,
-  helper container, agent) is reported as `cloning_repository` with the step
+  v1.27.1-phw.4 the bootstrap preparation (volume, helper image, helper
+  container, agent) is reported as `cloning_repository` with the step
   "preparing the source volume", and a first-time image pull no longer breaks
   the container ID ("page not found"). Fixture:
   `test/fixtures/devsy/n-volume-clone-logs-follow`.
+- The helper container runs the nested `up`, including the repository's
+  `initializeCommand` (there is no copy of the repository on the host to run
+  it on). Like VS Code's "Clone Repository in Container Volume", which does
+  the same. From v1.27.1-phw.5 its image follows VS Code's recipe:
+  `mcr.microsoft.com/devcontainers/base` Alpine (bash, git; pinned by digest)
+  plus `git-lfs nodejs python3 npm make g++ docker-cli docker-cli-buildx
+  docker-cli-compose`. Devsy builds it locally on first use as
+  `devsy-volume-bootstrap:<hash>` (about 1 GB; needs `mcr.microsoft.com` and
+  the Alpine package mirror once), reported as "building the helper image".
+  Before phw.5 it was `docker:27-cli`, which has no bash, so `#!/bin/bash`
+  initialize scripts failed with "not found" (exit 127).
 - Not used on Fedora: Docker runs natively, and the host folder is fast and
   visible to host tools.
 
