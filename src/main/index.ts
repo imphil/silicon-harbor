@@ -17,6 +17,7 @@ import { registerIpc } from "./ipc.js"
 import { LogStore } from "./log-store.js"
 import { NodeHost } from "./requirements/host.js"
 import { RequirementService } from "./requirements/service.js"
+import { userBinDir } from "./requirements/user-bin.js"
 import { SettingsStore } from "./settings-store.js"
 
 // Tests run against a throwaway profile (settings, logs, Chromium caches) so
@@ -38,8 +39,10 @@ function broadcast(channel: string, payload: unknown): void {
 function startBackend(): void {
   const devsyHome = defaultDevsyHome(process.platform, homedir(), process.env)
   mkdirSync(devsyHome, { recursive: true })
-  // Our own tools (docker-credential-icr), on the Devsy CLI's PATH.
-  const binDir = join(devsyHome, "bin")
+  // Our own tools (docker-credential-icr). On the user's PATH (their own
+  // `docker pull icr.io/…` needs the helper too) and, because GUI apps and
+  // a PATH changed at runtime don't see it, explicitly on the Devsy CLI's.
+  const binDir = userBinDir(process.platform, homedir(), process.env)
   const info = appInfo()
   runner = new CliRunner({
     // A missing binary surfaces as a failed operation with a clear message.

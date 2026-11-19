@@ -15,6 +15,7 @@ import {
 } from "../requirements/git-credentials"
 import { ide, VSCODE_DOWNLOAD_URL } from "../requirements/ide"
 import { requirementsFor } from "../requirements/registry"
+import { userBinDir } from "../requirements/user-bin"
 import { parseWslVersion, wsl } from "../requirements/wsl"
 import { xquartz } from "../requirements/xquartz"
 import { FakeHost, fail, fakeContext, notFound, ok } from "./fake-host"
@@ -432,6 +433,86 @@ describe("credential helper", () => {
     expect(status.state).toBe("missing")
     expect(status.fix).toBeUndefined()
     expect(status.detail).toMatch(/cannot be installed automatically yet/)
+  })
+
+  it("on macOS stages the download and copies it to /usr/local/bin with the admin prompt", async () => {
+    const host = new FakeHost({
+      platform: "darwin",
+      files: { [config]: "{}\n" },
+    })
+    const macInstallable = ManifestSchema.parse({
+      ...installable,
+      items: {
+        ...installable.items,
+        "docker-credential-icr": {
+          ...installable.items["docker-credential-icr"],
+          assets: {
+            "darwin-arm64": {
+              kind: "binary",
+              url: "https://example.com/docker-credential-icr",
+              sha256: "b".repeat(64),
+            },
+          },
+        },
+      },
+    })
+    const ctx = fakeContext(host, {
+      manifest: macInstallable,
+      binDir: userBinDir("darwin", "/Users/dev", {}),
+    })
+    await credentialHelper.fix?.(ctx)
+    expect(ctx.installs).toHaveLength(1)
+    const staged = ctx.installs[0].binaryDest ?? ""
+    expect(staged).not.toContain("/usr/local/bin")
+    expect(host.elevatedRuns).toEqual([
+      `/bin/sh -c mkdir -p '/usr/local/bin' && install -m 0755 '${staged}' '/usr/local/bin/docker-credential-icr'`,
+    ])
+  })
+
+  it("on Windows installs per user and adds the folder to the user's PATH", async () => {
+    const host = new FakeHost({
+      platform: "win32",
+      files: { "C:\\Users\\dev\\.docker\\config.json": "{}\n" },
+      commands: { "powershell.exe": ok("") },
+    })
+    const binDir = userBinDir("win32", "C:\\Users\\dev", {
+      LOCALAPPDATA: "C:\\Users\\dev\\AppData\\Local",
+    })
+    expect(binDir).toBe(
+      "C:\\Users\\dev\\AppData\\Local\\Programs\\docker-credential-icr",
+    )
+    const winInstallable = ManifestSchema.parse({
+      ...installable,
+      items: {
+        ...installable.items,
+        "docker-credential-icr": {
+          ...installable.items["docker-credential-icr"],
+          assets: {
+            "win32-x64": {
+              kind: "binary",
+              url: "https://example.com/docker-credential-icr.exe",
+              sha256: "b".repeat(64),
+            },
+          },
+        },
+      },
+    })
+    const ctx = fakeContext(host, { manifest: winInstallable, binDir })
+    await credentialHelper.fix?.(ctx)
+    expect(ctx.installs).toEqual([
+      {
+        id: "docker-credential-icr",
+        binaryDest: `${binDir}\\docker-credential-icr.exe`,
+      },
+    ])
+    expect(host.elevatedRuns).toEqual([])
+    const ps = host.runs.find((r) => r.startsWith("powershell.exe"))
+    expect(ps).toContain(`$d = '${binDir}'`)
+    expect(ps).toContain("SetEnvironmentVariable('Path', $n, 'User')")
+  })
+
+  it("on Linux installs into ~/.local/bin", () => {
+    expect(userBinDir("linux", "/home/dev", {})).toBe("/home/dev/.local/bin")
   })
 
   it("installs into our bin dir and merges the config with a backup", async () => {

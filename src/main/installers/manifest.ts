@@ -29,7 +29,7 @@ const Sha256Schema = z.string().regex(/^[0-9a-f]{64}$/)
 
 export const AssetSchema = z
   .object({
-    /** dmg: copy appName to /Applications; pkg: `installer`; msi: msiexec; inno: Inno Setup exe; binary: copy to our bin dir. */
+    /** dmg: copy appName to /Applications; pkg: `installer`; msi: msiexec; inno: Inno Setup exe; binary: copy to the user bin dir (see requirements/user-bin.ts). */
     kind: z.enum(["dmg", "pkg", "msi", "inno", "binary"]),
     url: z
       .string()

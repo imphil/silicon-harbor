@@ -1,4 +1,3 @@
-import { join } from "node:path"
 import type { RequirementStatus } from "../../shared/api"
 import { findAsset } from "../installers/manifest"
 import {
@@ -12,11 +11,13 @@ import {
   type Requirement,
   type RequirementContext,
 } from "./types"
+import { joinFor, userBinDirNeedsElevation } from "./user-bin"
 
 /**
  * docker-credential-icr: signs image pulls from icr.io in with the user's IBM
- * Cloud login. Needs the binary (on PATH, or in our bin dir which is on the
- * Devsy CLI's PATH) and `credHelpers["icr.io"] = "icr"` in the Docker config.
+ * Cloud login. Needs the binary (on PATH, or in ctx.binDir, which is on both
+ * the user's and the Devsy CLI's PATH) and `credHelpers["icr.io"] = "icr"` in
+ * the Docker config.
  */
 
 export function helperBinaryName(platform: NodeJS.Platform): string {
@@ -57,6 +58,79 @@ async function diagnose(ctx: RequirementContext): Promise<State> {
   return hasIcrHelper(read.config)
     ? { kind: "ok", version }
     : { kind: "not-configured", version }
+}
+
+/**
+ * Installs the helper into ctx.binDir, which is on the user's own PATH (see
+ * user-bin.ts). macOS needs the admin prompt for /usr/local/bin, so the
+ * download is staged in a temp dir first; Windows adds the folder to the
+ * user's PATH.
+ */
+async function installHelper(ctx: RequirementContext): Promise<void> {
+  const { host } = ctx
+  const name = helperBinaryName(host.platform)
+  const dest = joinFor(host.platform, ctx.binDir, name)
+
+  if (!userBinDirNeedsElevation(host.platform)) {
+    await host.mkdirp(ctx.binDir)
+    await ctx.install("docker-credential-icr", { binaryDest: dest })
+    if (host.platform === "win32") await addToUserPath(ctx, ctx.binDir)
+    return
+  }
+
+  const staging = await host.tempDir("sh-icr-")
+  try {
+    const staged = joinFor(host.platform, staging, name)
+    await ctx.install("docker-credential-icr", { binaryDest: staged })
+    // Paths are ours (temp dir, fixed bin dir); refuse anything that could
+    // break out of the single quotes rather than escaping it.
+    if ([staged, ctx.binDir, dest].some((p) => p.includes("'")))
+      throw new Error("Unexpected character in an install path.")
+    ctx.progress(
+      "Installing docker-credential-icr… You may be asked for your password.",
+    )
+    const res = await host.runElevated("/bin/sh", [
+      "-c",
+      `mkdir -p '${ctx.binDir}' && install -m 0755 '${staged}' '${dest}'`,
+    ])
+    if (res.code !== 0)
+      throw new Error(
+        res.code === 126 || res.code === 127
+          ? "Administrator rights were not granted."
+          : `Installing docker-credential-icr failed: ${lastLine(res.stderr || res.stdout)}`,
+      )
+  } finally {
+    await host.remove(staging)
+  }
+}
+
+/** Adds dir to the user's (not the machine's) PATH; no elevation needed. */
+async function addToUserPath(
+  ctx: RequirementContext,
+  dir: string,
+): Promise<void> {
+  const quoted = dir.replaceAll("'", "''")
+  const script = [
+    `$d = '${quoted}'`,
+    `$p = [Environment]::GetEnvironmentVariable('Path', 'User')`,
+    `if (-not (($p -split ';') -contains $d)) {`,
+    `  $n = if ($p) { "$p;$d" } else { $d }`,
+    `  [Environment]::SetEnvironmentVariable('Path', $n, 'User')`,
+    `}`,
+  ].join("\n")
+  const res = await ctx.host.run(
+    "powershell.exe",
+    ["-NoProfile", "-NonInteractive", "-Command", script],
+    { timeoutMs: 30_000 },
+  )
+  if (res.code !== 0)
+    throw new Error(
+      `docker-credential-icr was installed, but adding it to your PATH failed: ${lastLine(res.stderr || res.stdout)}`,
+    )
+}
+
+function lastLine(text: string): string {
+  return text.trim().split(/\r?\n/).slice(-1)[0] ?? ""
 }
 
 export const credentialHelper: Requirement = {
@@ -111,10 +185,7 @@ export const credentialHelper: Requirement = {
 
   async fix(ctx) {
     const { host } = ctx
-    if (!(await findHelper(ctx))) {
-      const dest = join(ctx.binDir, helperBinaryName(host.platform))
-      await ctx.install("docker-credential-icr", { binaryDest: dest })
-    }
+    if (!(await findHelper(ctx))) await installHelper(ctx)
 
     const path = dockerConfigPath(host.env, host.homeDir)
     const text = await host.readText(path)

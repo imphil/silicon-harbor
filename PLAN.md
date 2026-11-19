@@ -313,7 +313,7 @@ documented; all spikes green or with a written workaround.
 - Verified here: unit tests with fakes for all three platforms; read-only checks on this Linux machine (Docker ok,
   credential helper missing, VS Code found). Not verified: any real fix/installer — needs the macOS, Windows and
   Fedora test machines.
-- `$DEVSY_HOME/bin` is now on the Devsy CLI's PATH (for docker-credential-icr).
+- docker-credential-icr installs into a directory on the user's own PATH (macOS `/usr/local/bin` with admin prompt, Fedora `~/.local/bin`, Windows per-user folder added to the user PATH), so the shared `credHelpers` entry also works in the user's own terminal; that directory is also prepended to the Devsy CLI's PATH.
 
 ### M1 — Engine integration (weeks 3–4, Track A)
 
