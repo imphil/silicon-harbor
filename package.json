@@ -26,6 +26,7 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "postinstall": "install-electron",
+    "pretest:e2e": "electron-vite build",
     "test:e2e": "playwright test"
   },
   "devDependencies": {

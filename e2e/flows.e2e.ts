@@ -62,7 +62,7 @@ test("create an environment: five steps, then running in the IDE", async () => {
   await expect(page.getByTestId("status-tag")).toHaveText("Running", {
     timeout: 15_000,
   })
-  await expect(page.getByText("VS Code is open.")).toBeVisible()
+  await expect(page.getByText("IBM Bob is open.")).toBeVisible()
 
   await page.getByRole("tab", { name: "Log" }).click()
   await expect(page.getByTestId("log")).toContainText("Environment is ready")
@@ -70,7 +70,7 @@ test("create an environment: five steps, then running in the IDE", async () => {
   await page.getByRole("link", { name: "Environments" }).first().click() // breadcrumb
   await expect(page.locator("table")).toContainText("core-rtl")
   await expect(
-    page.getByRole("button", { name: "Open in VS Code" }),
+    page.getByRole("button", { name: "Open in IBM Bob" }),
   ).toBeVisible()
 })
 
