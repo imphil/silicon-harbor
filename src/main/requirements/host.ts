@@ -28,6 +28,8 @@ export interface RunResult {
   stderr: string
   /** True when the executable does not exist. */
   notFound?: boolean
+  /** True when it was killed after timeoutMs. */
+  timedOut?: boolean
 }
 
 export interface RunOptions {
@@ -83,8 +85,13 @@ export function decodeOutput(buffer: Buffer): string {
   return buffer.toString("utf8")
 }
 
+/** How long to wait for the rest of the output after a process exited. */
+const OUTPUT_GRACE_MS = 2_000
+
 export interface NodeHostOptions {
   openExternal(url: string): Promise<void>
+  /** Receives one entry per command run (the setup log). */
+  log?(entry: string): void
   env?: NodeJS.ProcessEnv
   platform?: NodeJS.Platform
   arch?: string
@@ -108,6 +115,20 @@ export class NodeHost implements Host {
   }
 
   run(cmd: string, args: string[], options: RunOptions = {}) {
+    const started = Date.now()
+    return this.spawnCollect(cmd, args, options).then((result) => {
+      this.options.log?.(formatRun(cmd, args, result, Date.now() - started))
+      return result
+    })
+  }
+
+  /**
+   * Resolves when the process exits, not when its output pipes close: a
+   * process may start another one that inherits the pipes and keeps running
+   * (`rdctl start` launches the Rancher Desktop app), which would otherwise
+   * keep us waiting forever. timeoutMs is a hard limit either way.
+   */
+  private spawnCollect(cmd: string, args: string[], options: RunOptions) {
     return new Promise<RunResult>((resolve) => {
       // Windows .cmd/.bat shims (code.cmd) cannot be spawned without a shell.
       const shell = this.platform === "win32" && /\.(cmd|bat)$/i.test(cmd)
@@ -125,24 +146,46 @@ export class NodeHost implements Host {
       }
       child.stdout?.on("data", collect(out))
       child.stderr?.on("data", collect(err))
-      const timer = setTimeout(() => child.kill(), options.timeoutMs ?? 30_000)
-      child.on("error", (error: NodeJS.ErrnoException) => {
+
+      let settled = false
+      let timedOut = false
+      let grace: NodeJS.Timeout | undefined
+      const finish = (result: RunResult) => {
+        if (settled) return
+        settled = true
         clearTimeout(timer)
-        resolve({
+        clearTimeout(grace)
+        // Whoever else holds the pipes may keep them; we stop listening.
+        child.stdout?.destroy()
+        child.stderr?.destroy()
+        resolve(result)
+      }
+      const collected = (code: number | null): RunResult => ({
+        code: timedOut ? null : code,
+        stdout: decodeOutput(Buffer.concat(out)),
+        stderr: decodeOutput(Buffer.concat(err)),
+        ...(timedOut ? { timedOut } : {}),
+      })
+
+      const timer = setTimeout(() => {
+        timedOut = true
+        child.kill()
+        // Don't rely on exit/close after a kill either.
+        grace = setTimeout(() => finish(collected(null)), OUTPUT_GRACE_MS)
+      }, options.timeoutMs ?? 30_000)
+      child.on("error", (error: NodeJS.ErrnoException) => {
+        finish({
           code: null,
           stdout: "",
           stderr: error.message,
           notFound: error.code === "ENOENT",
         })
       })
-      child.on("close", (code) => {
-        clearTimeout(timer)
-        resolve({
-          code,
-          stdout: decodeOutput(Buffer.concat(out)),
-          stderr: decodeOutput(Buffer.concat(err)),
-        })
+      child.on("exit", (code) => {
+        clearTimeout(grace)
+        grace = setTimeout(() => finish(collected(code)), OUTPUT_GRACE_MS)
       })
+      child.on("close", (code) => finish(collected(code)))
     })
   }
 
@@ -226,4 +269,42 @@ export class NodeHost implements Host {
   openExternal(url: string) {
     return this.options.openExternal(url)
   }
+}
+
+const LOG_OUTPUT_LINES = 15
+
+/** One setup-log entry: command, outcome, duration and the end of the output. */
+export function formatRun(
+  cmd: string,
+  args: string[],
+  result: RunResult,
+  ms: number,
+): string {
+  const outcome = result.notFound
+    ? "not found"
+    : result.timedOut
+      ? "timed out"
+      : `exit ${result.code}`
+  const lines = [
+    `$ ${[cmd, ...args].map(quoteArg).join(" ")} → ${outcome} (${ms} ms)`,
+  ]
+  for (const [name, text] of [
+    ["stdout", result.stdout],
+    ["stderr", result.stderr],
+  ] as const) {
+    const tail = text
+      .trimEnd()
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .slice(-LOG_OUTPUT_LINES)
+    for (const line of tail) lines.push(`  ${name}: ${line.slice(0, 500)}`)
+  }
+  return lines.join("\n")
+}
+
+function quoteArg(arg: string): string {
+  const oneLine = arg.length > 200 ? `${arg.slice(0, 200)}…` : arg
+  return /[\s"]/.test(oneLine)
+    ? JSON.stringify(oneLine.replace(/\r?\n/g, " ⏎ "))
+    : oneLine
 }

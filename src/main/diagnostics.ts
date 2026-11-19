@@ -9,6 +9,8 @@ export interface DiagnosticsInput {
   environments: Environment[]
   /** Log of the environment the bundle is for, if any. */
   focus?: { id: string; log: LogLine[] }
+  /** Last lines of the setup log (requirement checks and fixes). */
+  setupLog?: string[]
 }
 
 const MAX_LOG_LINES = 300
@@ -52,6 +54,10 @@ export function buildDiagnostics(input: DiagnosticsInput): string {
     lines.push("", `Log of ${input.focus.id} (last ${MAX_LOG_LINES} lines):`)
     for (const l of input.focus.log.slice(-MAX_LOG_LINES))
       lines.push(`${l.ts} ${l.level.toUpperCase().padEnd(5)} ${l.text}`)
+  }
+  if (input.setupLog?.length) {
+    lines.push("", `Setup log (last ${input.setupLog.length} lines):`)
+    lines.push(...input.setupLog)
   }
   return redact(lines.join("\n"), input.homeDir, input.userName)
 }

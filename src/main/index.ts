@@ -19,6 +19,7 @@ import { NodeHost } from "./requirements/host.js"
 import { RequirementService } from "./requirements/service.js"
 import { userBinDir } from "./requirements/user-bin.js"
 import { SettingsStore } from "./settings-store.js"
+import { SetupLog } from "./setup-log.js"
 
 // Tests run against a throwaway profile (settings, logs, Chromium caches) so
 // they never touch the user's real one. Must happen before the app is ready.
@@ -71,8 +72,16 @@ function startBackend(): void {
     onChange: (envs) => broadcast(IpcChannel.evtEnvironments, envs),
     onLog: (id, line) => broadcast(IpcChannel.evtLog, { id, line }),
   })
+  const setupLog = new SetupLog(
+    join(app.getPath("userData"), "logs", "setup.log"),
+  )
+  setupLog.write(
+    `Silicon Harbor ${info.appVersion} started (${process.platform} ${process.arch})`,
+  )
   const requirements = new RequirementService({
+    log: (entry) => setupLog.write(entry),
     host: new NodeHost({
+      log: (entry) => setupLog.write(entry),
       homeDir: homedir(),
       userName: currentUserName(),
       // GUI apps on macOS get a minimal PATH; find Homebrew/Rancher tools.
@@ -102,6 +111,7 @@ function startBackend(): void {
     devsyHome,
     writeClipboard: (text) => clipboard.writeText(text),
     requirements,
+    setupLog: (lines) => setupLog.tail(lines),
   })
   void environments.start()
   void requirements.check()

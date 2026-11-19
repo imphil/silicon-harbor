@@ -11,6 +11,7 @@ const PENDING = "/profile/requirements-pending.json"
 function setup(requirements: Requirement[], bootTime = 1_000_000) {
   const host = new FakeHost({ platform: "darwin" })
   const events: RequirementStatus[][] = []
+  const log: string[] = []
   let boot = bootTime
   const service = new RequirementService({
     host,
@@ -26,11 +27,13 @@ function setup(requirements: Requirement[], bootTime = 1_000_000) {
     onChange: (list) => events.push(list),
     requirements,
     sleep: async () => {},
+    log: (entry) => log.push(entry),
   })
   return {
     host,
     service,
     events,
+    log,
     reboot: (at: number) => {
       boot = at
     },
@@ -213,9 +216,24 @@ describe("RequirementService", () => {
         throw new Error("download failed")
       },
     }
-    const { service, events } = setup([failing])
+    const { service, events, log } = setup([failing])
     await service.check()
     await expect(service.fix("xquartz")).rejects.toThrow("download failed")
     expect(events.at(-1)?.[0].state).toBe("missing")
+    expect(log).toEqual([
+      "fix xquartz: started",
+      "fix xquartz: failed: download failed",
+    ])
+  })
+
+  it("logs a fix's progress and outcome", async () => {
+    const { service, log } = setup([fixable({ needsRelogin: true })])
+    await service.check()
+    await service.fix("xquartz")
+    expect(log).toEqual([
+      "fix xquartz: started",
+      "fix xquartz: Downloading…",
+      "fix xquartz: done (needs re-login)",
+    ])
   })
 })

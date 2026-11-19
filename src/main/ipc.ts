@@ -31,7 +31,11 @@ export interface IpcDeps {
   devsyHome: string
   writeClipboard(text: string): void
   requirements: Pick<RequirementService, "check" | "fix">
+  /** The last lines of the setup log (requirement checks and fixes). */
+  setupLog?(lines: number): string[]
 }
+
+const SETUP_LOG_LINES = 200
 
 const RequirementIdSchema = z.enum([
   "container-engine",
@@ -111,6 +115,7 @@ export function registerIpc(deps: IpcDeps): void {
         userName,
         environments: envs.list(),
         focus: focusId ? { id: focusId, log: envs.getLog(focusId) } : undefined,
+        setupLog: deps.setupLog?.(SETUP_LOG_LINES),
       }),
     )
   })

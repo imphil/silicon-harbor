@@ -44,6 +44,8 @@ export interface RequirementServiceDeps {
   ): Promise<void>
   sleep?(ms: number): Promise<void>
   requirements?: Requirement[]
+  /** Setup log: fixes, their progress and outcome. */
+  log?(entry: string): void
 }
 
 export class RequirementService {
@@ -83,11 +85,19 @@ export class RequirementService {
 
     this.working.set(id, "Working…")
     this.emit()
+    const log = this.deps.log ?? (() => {})
+    log(`fix ${id}: started`)
     try {
       const ctx = await this.context(id)
       const outcome = await requirement.fix(ctx)
       if (outcome?.needsReboot) await this.setPending(id, "reboot")
       else if (outcome?.needsRelogin) await this.setPending(id, "relogin")
+      log(
+        `fix ${id}: done${outcome?.needsReboot ? " (needs reboot)" : outcome?.needsRelogin ? " (needs re-login)" : ""}`,
+      )
+    } catch (error) {
+      log(`fix ${id}: failed: ${(error as Error).message}`)
+      throw error
     } finally {
       this.working.delete(id)
       await this.check()
@@ -148,6 +158,8 @@ export class RequirementService {
       resolvePending: () => resolved?.add(id),
       progress: (detail) => {
         if (!this.working.has(id)) return
+        // Download percentages would flood the log.
+        if (!/\d+%$/.test(detail)) this.deps.log?.(`fix ${id}: ${detail}`)
         this.working.set(id, detail)
         this.emit()
       },

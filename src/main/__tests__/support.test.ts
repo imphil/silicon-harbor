@@ -167,6 +167,29 @@ describe("diagnostics", () => {
     )
   })
 
+  it("appends the setup log, redacted", () => {
+    const text = buildDiagnostics({
+      app: {
+        appVersion: "0.1.0",
+        electronVersion: "44",
+        platform: "win32",
+        arch: "x64",
+        devsyPath: null,
+      },
+      devsyVersion: "v1",
+      devsyHome: "C:\\Users\\jdoe\\.silicon-harbor",
+      homeDir: "C:\\Users\\jdoe",
+      userName: "jdoe",
+      environments: [],
+      setupLog: [
+        "2026-11-19T20:00:00.000Z $ C:\\Users\\jdoe\\AppData\\rdctl.exe start → timed out (120000 ms)",
+      ],
+    })
+    expect(text).toContain(
+      "Setup log (last 1 lines):\n2026-11-19T20:00:00.000Z $ ~\\AppData\\rdctl.exe start → timed out (120000 ms)",
+    )
+  })
+
   it("summarises environments and the focused log", () => {
     const text = buildDiagnostics({
       app: {
