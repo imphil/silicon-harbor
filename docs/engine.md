@@ -98,9 +98,12 @@ boundary is slow.
   own worktree. Deleting an environment removes its worktree, and the volume
   once no worktree is left.
 - Progress: the clone and container start run in a nested `up` inside the
-  bootstrap container. Its phases only reach the CLI with the fork's bootstrap
-  status fix (our fork from v1.27.1-phw.2); without it the stream starts
-  at `configuring_workspace`. Fixture: `test/fixtures/devsy/n-volume-clone-logs-follow`.
+  bootstrap container; the fork relays its phases (from v1.27.1-phw.2). From
+  v1.27.1-phw.4 the bootstrap preparation (volume, `docker:27-cli` pull,
+  helper container, agent) is reported as `cloning_repository` with the step
+  "preparing the source volume", and a first-time image pull no longer breaks
+  the container ID ("page not found"). Fixture:
+  `test/fixtures/devsy/n-volume-clone-logs-follow`.
 - Not used on Fedora: Docker runs natively, and the host folder is fast and
   visible to host tools.
 

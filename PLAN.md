@@ -285,7 +285,7 @@ documented; all spikes green or with a written workaround.
 - Packaging from Linux (`docs/spikes/packaging.md`): macOS zip x64 + arm64 ad-hoc signed with rcodesign ✔, Fedora RPM ✔,
   Windows zip ✔. Windows NSIS installer ✔ in CI (electron-builder runs in the
   `electronuserland/builder` Wine image). CI: GitHub Actions on `imphil/silicon-harbor`, all targets on ubuntu-24.04.
-- Devsy binaries pinned and fetched with sha256 check by `scripts/fetch-devsy.mjs`. Source: our fork `imphil/devsy` v1.27.1-phw.2 (was upstream v1.27.1), checksums from the release's asset digests. (phw.1 has no binaries: its macOS build never got a runner.) Its CLI fetches the in-container agent from the fork's release too (`config.releaseRepo`).
+- Devsy binaries pinned and fetched with sha256 check by `scripts/fetch-devsy.mjs`. Source: our fork `imphil/devsy` v1.27.1-phw.4 (was upstream v1.27.1), checksums from the release's asset digests. (phw.1 has no binaries: its macOS build never got a runner.) Its CLI fetches the in-container agent from the fork's release too (`config.releaseRepo`).
 - Remaining M0: first manual install on the macOS and Windows test machines; real-world spikes
   (github.ibm.com repo + icr.io + IDEs + X11) on those machines; app icons.
 
