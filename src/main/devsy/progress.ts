@@ -64,6 +64,16 @@ const PHASE_DETAIL: Record<string, string> = {
   ready: "Ready",
 }
 
+/**
+ * Devsy sub-steps worth naming (its own `step` text otherwise stays out of
+ * the UI). Both come from our fork's --clone-into-volume bootstrap.
+ */
+const STEP_DETAIL: Record<string, string> = {
+  "preparing the source volume": "Preparing the source volume",
+  "building the helper image":
+    "Building the helper container (first time only, can take a few minutes)",
+}
+
 export function stepForPhase(phase: string): StepId | undefined {
   return PHASE_STEP[phase]
 }
@@ -79,6 +89,8 @@ export interface Progress {
   seen: Set<string>
   /** Whether any Devsy event arrived yet (ends the "check" step). */
   started: boolean
+  /** Named sub-steps (STEP_DETAIL) running now, innermost last. */
+  subSteps: string[]
 }
 
 const isUpKind = (kind: OperationKind) =>
@@ -99,7 +111,7 @@ export function createProgress(kind: OperationKind): Progress {
     steps[0].detail = "Reading the repository. You may be asked to sign in."
   if (kind === "stop") steps[0].detail = "Stopping the environment"
   if (kind === "delete") steps[0].detail = "Removing the environment"
-  return { kind, steps, seen: new Set(), started: false }
+  return { kind, steps, seen: new Set(), started: false, subSteps: [] }
 }
 
 function step(progress: Progress, id: StepId): OperationStep {
@@ -157,13 +169,32 @@ export function applyStatus(
         earlier.detail = undefined
       }
     }
-    if (target.state === "pending" || target.state === "active") {
+    // A step skipped up front still runs when Devsy reports it: starting or
+    // rebuilding a --clone-into-volume workspace goes through the bootstrap
+    // container and the clone ("cloning_repository") again.
+    if (
+      target.state === "pending" ||
+      target.state === "active" ||
+      target.state === "skipped"
+    ) {
       target.state = "active"
-      target.detail = phaseDetail(event.phase)
+      const named = event.step ? STEP_DETAIL[event.step] : undefined
+      if (named) progress.subSteps.push(event.step as string)
+      target.detail = named ?? phaseDetail(event.phase)
     }
   } else if (event.state === "failed") {
     target.state = "failed"
     target.detail = phaseDetail(event.phase)
+  } else if (
+    event.state === "succeeded" &&
+    event.step &&
+    progress.subSteps.at(-1) === event.step
+  ) {
+    // Back to the enclosing sub-step, or the phase itself.
+    progress.subSteps.pop()
+    const outer = progress.subSteps.at(-1)
+    if (target.state === "active")
+      target.detail = outer ? STEP_DETAIL[outer] : phaseDetail(event.phase)
   } else if (event.state === "succeeded" && event.phase === "ready") {
     target.state = "done"
     target.detail = undefined

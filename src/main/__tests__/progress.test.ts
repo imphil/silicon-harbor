@@ -94,6 +94,42 @@ describe("progress", () => {
     })
   })
 
+  it("names the volume preparation and helper image build", () => {
+    const p = createProgress("create")
+    const details: string[] = []
+    for (const e of statusEvents("n-volume-clone-logs-follow")) {
+      applyStatus(p, e)
+      const d = p.steps.find((s) => s.id === "clone")?.detail
+      if (d && details.at(-1) !== d) details.push(d)
+    }
+    expect(details.slice(0, 4)).toEqual([
+      "Preparing the source volume",
+      "Building the helper container (first time only, can take a few minutes)",
+      "Preparing the source volume",
+      "Cloning the repository",
+    ])
+  })
+
+  it("shows the clone step when a rebuild clones into a volume again", () => {
+    const p = createProgress("rebuild")
+    expect(p.steps.find((s) => s.id === "clone")?.state).toBe("skipped")
+    const seen: string[] = []
+    for (const e of statusEvents("n-volume-clone-logs-follow")) {
+      applyStatus(p, e)
+      const active = p.steps.find((s) => s.state === "active")
+      if (active && seen.at(-1) !== active.id) seen.push(active.id)
+    }
+    expect(seen).toEqual(["clone", "start", "prepare", "ide"])
+    finishProgress(p, "succeeded")
+    expect(states(p).clone).toBe("done")
+  })
+
+  it("keeps the clone step skipped for a start that does not clone", () => {
+    const p = replay("g2-restart-logs-follow", "start")
+    finishProgress(p, "succeeded")
+    expect(states(p).clone).toBe("skipped")
+  })
+
   it("shows plain-language details for the active phase", () => {
     const p = createProgress("create")
     for (const e of statusEvents("b-task-logs-follow")) {

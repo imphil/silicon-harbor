@@ -1,2 +1,2 @@
-devsy workspace task logs cwsqoddyugez --follow --log-level info --log-output json
-# up submitted with --clone-into-volume, bootstrap image not present yet (imphil/devsy main-fork 316f61e48 = v1.27.1-phw.4, built locally)
+devsy workspace task logs bwdmaevrpvxb --follow --log-level info --log-output json
+# up submitted with --clone-into-volume, helper image not built yet (imphil/devsy v1.27.1-phw.5 release binary)
