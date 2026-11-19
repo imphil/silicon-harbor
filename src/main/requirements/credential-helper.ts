@@ -48,7 +48,9 @@ async function diagnose(ctx: RequirementContext): Promise<State> {
     )
     return { kind: "missing", installable: lookup.ok }
   }
-  const res = await host.run(helper, ["version"], { timeoutMs: 10_000 })
+  // clap: `--version` prints "docker-credential-icr 0.1.0"; there is no
+  // `version` subcommand.
+  const res = await host.run(helper, ["--version"], { timeoutMs: 10_000 })
   const version = res.code === 0 ? firstVersion(res.stdout) : undefined
 
   const read = parseDockerConfig(

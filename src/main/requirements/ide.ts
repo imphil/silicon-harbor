@@ -1,4 +1,4 @@
-import type { IdeId, RequirementStatus } from "../../shared/api"
+import type { IdeId, IdeStatus, RequirementStatus } from "../../shared/api"
 import type { Host } from "./host"
 import { firstLine, firstVersion, type Requirement } from "./types"
 
@@ -13,9 +13,25 @@ interface IdeSpec {
   label: string
   cli: string
   macPaths: string[]
+  downloadUrl: string
+  recommended?: boolean
 }
 
+/** IBM Bob is the recommended IDE; its official download page. */
+export const BOB_DOWNLOAD_URL = "https://bob.ibm.com/download?bob=ide"
+export const VSCODE_DOWNLOAD_URL = "https://code.visualstudio.com/download"
+export const VSCODIUM_DOWNLOAD_URL = "https://vscodium.com/#install"
+
+/** In the order shown: IBM Bob first. */
 export const IDES: IdeSpec[] = [
+  {
+    id: "bob",
+    label: "IBM Bob",
+    cli: "bobide",
+    macPaths: ["/Applications/Bobide.app/Contents/Resources/app/bin/bobide"],
+    downloadUrl: BOB_DOWNLOAD_URL,
+    recommended: true,
+  },
   {
     id: "vscode",
     label: "Visual Studio Code",
@@ -23,12 +39,7 @@ export const IDES: IdeSpec[] = [
     macPaths: [
       "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code",
     ],
-  },
-  {
-    id: "bob",
-    label: "IBM Bob",
-    cli: "bobide",
-    macPaths: ["/Applications/Bobide.app/Contents/Resources/app/bin/bobide"],
+    downloadUrl: VSCODE_DOWNLOAD_URL,
   },
   {
     id: "codium",
@@ -39,11 +50,9 @@ export const IDES: IdeSpec[] = [
       "/Applications/Codium.app/Contents/Resources/app/bin/codium",
       "/Applications/VSCodium.app/Contents/Resources/app/bin/codium",
     ],
+    downloadUrl: VSCODIUM_DOWNLOAD_URL,
   },
 ]
-
-/** IBM Bob is the recommended IDE; its official download page. */
-export const BOB_DOWNLOAD_URL = "https://bob.ibm.com/download?bob=ide"
 
 export interface FoundIde {
   id: IdeId
@@ -75,12 +84,27 @@ export async function detectIdes(host: Host): Promise<FoundIde[]> {
   return found
 }
 
+/** Every supported IDE with what was found, for Settings › IDE. */
+export function ideStatuses(found: FoundIde[]): IdeStatus[] {
+  return IDES.map((spec) => {
+    const hit = found.find((f) => f.id === spec.id)
+    return {
+      id: spec.id,
+      label: spec.label,
+      installed: Boolean(hit),
+      ...(hit?.version ? { version: hit.version } : {}),
+      downloadUrl: spec.downloadUrl,
+      ...(spec.recommended ? { recommended: true } : {}),
+    }
+  })
+}
+
 export const ide: Requirement = {
   id: "ide",
 
   async check(ctx): Promise<RequirementStatus> {
     const found = await detectIdes(ctx.host)
-    const base = { id: "ide" as const, title: "IDE" }
+    const base = { id: "ide" as const, title: "IDE", ides: ideStatuses(found) }
     if (found.length === 0) {
       return {
         ...base,

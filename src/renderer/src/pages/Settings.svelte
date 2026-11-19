@@ -1,21 +1,19 @@
 <script lang="ts">
-import type { AppInfo, IdeId } from "$shared/api"
+import type { AppInfo } from "$shared/api"
 import {
   Button,
   Checkbox,
-  RadioTile,
   StructuredList,
   StructuredListBody,
   StructuredListCell,
   StructuredListRow,
-  TileGroup,
 } from "carbon-components-svelte"
+import IdeList from "../lib/components/IdeList.svelte"
 import RequirementsList from "../lib/components/RequirementsList.svelte"
 import SettingsNav from "../lib/components/SettingsNav.svelte"
 import { api, usingMock } from "../lib/api"
 import { isSettingsSection, settingsSections } from "../lib/settings-sections"
 import { attempt, notifications, settings } from "../lib/stores"
-import { ideLabels, ideOrder } from "../lib/view"
 
 let { params = {} }: { params?: { section?: string } } = $props()
 
@@ -83,21 +81,13 @@ async function copyDiagnostics(): Promise<void> {
           The tools Silicon Harbor needs{platformName ? ` on ${platformName}` : ""}.
           Checked every time the app starts.
         </p>
-        <RequirementsList showFixAll />
+        <RequirementsList showFixAll manageIdeLink />
       {:else if section === "ide"}
         <p class="sh-muted">
-          New environments open with this IDE. You can change it per environment.
+          New environments open in the IDE you use by default. IBM Bob is
+          recommended.
         </p>
-        <TileGroup
-          legendText="Default IDE"
-          name="sh-default-ide"
-          selected={settings.value.defaultIde}
-          on:select={(e) => settings.update({ defaultIde: e.detail as IdeId })}
-        >
-          {#each ideOrder as id (id)}
-            <RadioTile value={id}>{ideLabels[id]}</RadioTile>
-          {/each}
-        </TileGroup>
+        <IdeList />
       {:else if section === "updates"}
         <StructuredList condensed>
           <StructuredListBody>

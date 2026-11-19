@@ -571,7 +571,9 @@ describe("credential helper", () => {
       platform: "linux",
       path: { "docker-credential-icr": "/usr/local/bin/docker-credential-icr" },
       commands: {
-        "/usr/local/bin/docker-credential-icr version": ok("0.2.0"),
+        "/usr/local/bin/docker-credential-icr --version": ok(
+          "docker-credential-icr 0.1.0\n",
+        ),
       },
     })
     const ctx = fakeContext(host)
@@ -585,7 +587,7 @@ describe("credential helper", () => {
     expect(host.writes.map((w) => w.path)).toEqual([config])
     expect(await credentialHelper.check(ctx)).toMatchObject({
       state: "ok",
-      version: "0.2.0",
+      version: "0.1.0",
       detail: "Signs in to icr.io with your IBM Cloud login.",
     })
   })
@@ -713,6 +715,29 @@ describe("IDE", () => {
       state: "ok",
       version: "1.105.1",
       detail: "VSCodium, Visual Studio Code",
+      ides: [
+        {
+          id: "bob",
+          label: "IBM Bob",
+          installed: false,
+          downloadUrl: "https://bob.ibm.com/download?bob=ide",
+          recommended: true,
+        },
+        {
+          id: "vscode",
+          label: "Visual Studio Code",
+          installed: true,
+          version: "1.106.0",
+          downloadUrl: "https://code.visualstudio.com/download",
+        },
+        {
+          id: "codium",
+          label: "VSCodium",
+          installed: true,
+          version: "1.105.1",
+          downloadUrl: "https://vscodium.com/#install",
+        },
+      ],
     })
   })
 

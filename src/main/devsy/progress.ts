@@ -93,6 +93,10 @@ export function createProgress(kind: OperationKind): Progress {
     else if (id === "clone" && kind !== "create") state = "skipped"
     return { id, state }
   })
+  // Before its first event, Devsy reads the repository with the user's Git
+  // (a sign-in prompt may appear) and checks the container engine.
+  if (kind === "create")
+    steps[0].detail = "Reading the repository. You may be asked to sign in."
   if (kind === "stop") steps[0].detail = "Stopping the environment"
   if (kind === "delete") steps[0].detail = "Removing the environment"
   return { kind, steps, seen: new Set(), started: false }

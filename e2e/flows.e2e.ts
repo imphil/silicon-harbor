@@ -144,6 +144,38 @@ test("health status and warning bar lead to the fix in Settings", async () => {
   })
 })
 
+test("IDE settings: one row per IDE, default choice and downloads", async () => {
+  const page = await openMock(launched, { route: "/settings/computer" })
+  await page
+    .getByTestId("requirement-ide")
+    .getByRole("link", { name: "Manage IDEs" })
+    .click()
+  await expect(page).toHaveURL(/#\/settings\/ide$/)
+
+  const bob = page.getByTestId("ide-bob")
+  await expect(bob).toContainText("IBM Bob")
+  await expect(bob).toContainText("Recommended")
+  await expect(bob).toContainText("1.0.3")
+  await expect(bob.getByLabel("Use by default")).toBeChecked()
+
+  const vscode = page.getByTestId("ide-vscode")
+  await expect(vscode).toContainText("Installed")
+  await vscode.getByText("Use by default").click()
+  await expect(vscode.getByLabel("Use by default")).toBeChecked()
+  await expect(bob.getByLabel("Use by default")).not.toBeChecked()
+
+  const codium = page.getByTestId("ide-codium")
+  await expect(codium).toContainText("Not installed")
+  await expect(codium.getByRole("link", { name: "Download" })).toHaveAttribute(
+    "href",
+    "https://vscodium.com/#install",
+  )
+  if (process.env.SH_SCREENSHOT_DIR)
+    await page.screenshot({
+      path: `${process.env.SH_SCREENSHOT_DIR}/settings-ide.png`,
+    })
+})
+
 test("search filters the environment list", async () => {
   const page = await openMock(launched, { scenario: "default" })
   const table = page.locator("table")

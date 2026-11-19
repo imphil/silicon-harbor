@@ -3,7 +3,14 @@ import { Button, InlineNotification } from "carbon-components-svelte"
 import { requirements } from "../stores"
 import RequirementIcon from "./RequirementIcon.svelte"
 
-let { showFixAll = false }: { showFixAll?: boolean } = $props()
+let {
+  showFixAll = false,
+  manageIdeLink = false,
+}: {
+  showFixAll?: boolean
+  /** Link the IDE row to Settings › IDE (not during first-run setup). */
+  manageIdeLink?: boolean
+} = $props()
 
 const needsRelogin = $derived(
   requirements.list.some((r) => r.state === "ok" && /log out/i.test(r.detail)),
@@ -67,6 +74,10 @@ const needsRelogin = $derived(
                 on:click={() => requirements.fix(req.id)}
               >
                 {req.fix.label}
+              </Button>
+            {:else if req.id === "ide" && manageIdeLink}
+              <Button kind="ghost" size="small" href="#/settings/ide">
+                Manage IDEs
               </Button>
             {/if}
           </span>

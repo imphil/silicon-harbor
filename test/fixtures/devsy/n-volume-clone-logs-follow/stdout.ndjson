@@ -1,6 +1,9 @@
+{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-1","phase":"cloning_repository","step":"preparing the source volume","state":"started"}
+{"kind":"status","schemaVersion":1,"operationId":"op-1","phase":"cloning_repository","step":"preparing the source volume","state":"started"}
+{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-1","phase":"cloning_repository","step":"preparing the source volume","state":"succeeded","durationMs":7432}
 {"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-1","phase":"cloning_repository","state":"started"}
 {"kind":"status","schemaVersion":1,"operationId":"op-1","phase":"cloning_repository","state":"started"}
-{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-1","phase":"cloning_repository","state":"succeeded","durationMs":754}
+{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-1","phase":"cloning_repository","state":"succeeded","durationMs":1062}
 {"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-2","phase":"resolving_config","state":"started"}
 {"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-2","phase":"resolving_config","state":"succeeded"}
 {"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-3","phase":"initialize_command","state":"started"}
@@ -8,14 +11,14 @@
 {"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-4","phase":"preparing_devcontainer","state":"started"}
 {"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-5","parentOperationId":"op-4","phase":"starting_container","state":"started"}
 {"kind":"status","schemaVersion":1,"operationId":"op-5","parentOperationId":"op-4","phase":"starting_container","state":"started"}
-{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-5","parentOperationId":"op-4","phase":"starting_container","state":"succeeded","durationMs":2025}
+{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-5","parentOperationId":"op-4","phase":"starting_container","state":"succeeded","durationMs":2757}
 {"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-6","parentOperationId":"op-4","phase":"injecting_agent","state":"started"}
 {"kind":"status","schemaVersion":1,"operationId":"op-6","parentOperationId":"op-4","phase":"injecting_agent","state":"started"}
-{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-6","parentOperationId":"op-4","phase":"injecting_agent","state":"succeeded","durationMs":836}
+{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-6","parentOperationId":"op-4","phase":"injecting_agent","state":"succeeded","durationMs":643}
 {"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-7","parentOperationId":"op-4","phase":"running_lifecycle_hook","state":"started"}
 {"kind":"status","schemaVersion":1,"operationId":"op-7","parentOperationId":"op-4","phase":"running_lifecycle_hook","state":"started"}
-{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-7","parentOperationId":"op-4","phase":"running_lifecycle_hook","state":"succeeded","durationMs":376}
-{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-4","phase":"preparing_devcontainer","state":"succeeded","durationMs":3274}
+{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-7","parentOperationId":"op-4","phase":"running_lifecycle_hook","state":"succeeded","durationMs":578}
+{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-4","phase":"preparing_devcontainer","state":"succeeded","durationMs":3992}
 {"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-1","phase":"configuring_workspace","state":"started"}
 {"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-1","phase":"configuring_workspace","state":"succeeded"}
 {"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-2","phase":"launching_ide","state":"started"}
@@ -23,4 +26,4 @@
 {"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-3","phase":"ready","state":"started"}
 {"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-3","phase":"ready","state":"succeeded"}
 {"kind":"status","schemaVersion":1,"operationId":"op-3","phase":"ready","state":"succeeded"}
-{"kind":"result","outcome":"success","containerId":"5bda76bea80ee6caa24bfe4bbbab0247c13238fb8af827ff0fa9b2e152cdf414","remoteUser":"vscode","remoteWorkspaceFolder":"/workspaces/shvol","runId":"02c98c3b-148b-486a-97a0-b402def84b8c"}
+{"kind":"result","outcome":"success","containerId":"99b9d3b55fe4d219af2a1ad32756ff983eea18a00c6eb64fb7ea448fa8e4cb19","remoteUser":"vscode","remoteWorkspaceFolder":"/workspaces/shvol","runId":"cc19fa00-8e80-4458-a19f-1ade2ea8e0e4"}

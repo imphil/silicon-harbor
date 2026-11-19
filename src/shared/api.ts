@@ -148,6 +148,20 @@ export interface RequirementStatus {
      */
     automatic?: boolean
   }
+  /** Only on the "ide" requirement: every supported IDE, found or not. */
+  ides?: IdeStatus[]
+}
+
+export interface IdeStatus {
+  id: IdeId
+  /** e.g. "IBM Bob", "Visual Studio Code". */
+  label: string
+  installed: boolean
+  version?: string
+  /** The vendor's download page (opened in the browser). */
+  downloadUrl: string
+  /** IBM Bob: the IDE we recommend. */
+  recommended?: boolean
 }
 
 // ---------------------------------------------------------------------------

@@ -63,6 +63,19 @@ describe("progress", () => {
     })
   })
 
+  it("hints at a sign-in prompt while a create waits for Devsy", () => {
+    const p = createProgress("create")
+    expect(p.steps[0]).toEqual({
+      id: "check",
+      state: "active",
+      detail: "Reading the repository. You may be asked to sign in.",
+    })
+    expect(createProgress("start").steps[0].detail).toBeUndefined()
+    for (const e of statusEvents("b-task-logs-follow").slice(0, 1))
+      applyStatus(p, e)
+    expect(p.steps[0]).toEqual({ id: "check", state: "done" })
+  })
+
   it("shows every step for a clone into a Docker volume", () => {
     const p = createProgress("create")
     const seen: string[] = []

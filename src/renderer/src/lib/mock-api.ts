@@ -17,6 +17,7 @@ import type {
   CreateEnvironmentRequest,
   Environment,
   IdeId,
+  IdeStatus,
   LogLine,
   Operation,
   OperationKind,
@@ -29,6 +30,24 @@ import type {
   UserError,
 } from "$shared/api"
 import { ideLabels } from "./view"
+
+const IDE_DOWNLOADS: Record<IdeId, string> = {
+  bob: "https://bob.ibm.com/download?bob=ide",
+  vscode: "https://code.visualstudio.com/download",
+  codium: "https://vscodium.com/#install",
+}
+
+/** Per-IDE status like the real check (src/main/requirements/ide.ts). */
+function mockIdes(installed: Partial<Record<IdeId, string>>): IdeStatus[] {
+  return (["bob", "vscode", "codium"] as IdeId[]).map((id) => ({
+    id,
+    label: ideLabels[id],
+    installed: id in installed,
+    ...(installed[id] ? { version: installed[id] } : {}),
+    downloadUrl: IDE_DOWNLOADS[id],
+    ...(id === "bob" ? { recommended: true } : {}),
+  }))
+}
 
 export type MockScenario = "default" | "first-run" | "empty" | "all-ok"
 export type MockPlatform = "mac" | "win" | "linux"
@@ -143,7 +162,14 @@ function requirementsFor(
         version: "2.51.0",
         detail: "Includes Git Credential Manager for github.ibm.com.",
       },
-      { id: "ide", title: "IDE", state: "ok", detail: "IBM Bob" },
+      {
+        id: "ide",
+        title: "IDE",
+        state: "ok",
+        version: "1.0.3",
+        detail: "IBM Bob",
+        ides: mockIdes({ bob: "1.0.3" }),
+      },
     ]
   }
 
@@ -172,6 +198,7 @@ function requirementsFor(
         state: "ok",
         version: "1.105",
         detail: "VSCodium",
+        ides: mockIdes({ codium: "1.105" }),
       },
     ]
   }
@@ -222,8 +249,9 @@ function requirementsFor(
       id: "ide",
       title: "IDE",
       state: "ok",
-      version: "1.106",
-      detail: "Visual Studio Code",
+      version: "1.0.3",
+      detail: "IBM Bob, Visual Studio Code",
+      ides: mockIdes({ bob: "1.0.3", vscode: "1.106" }),
     },
   ]
 }
