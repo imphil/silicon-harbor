@@ -68,7 +68,7 @@ package built this way.
 
 ```sh
 RCODESIGN=/path/to/rcodesign npm run package:mac    # zip, x64 + arm64, ad-hoc signed
-npm run package:win                                  # NSIS installer, x64 — needs Wine
+npm run package:win                                  # NSIS installer, x64 — needs Wine (CI: Wine image)
 npm run package:linux                                # Fedora RPM, x64 — needs rpmbuild
 ```
 

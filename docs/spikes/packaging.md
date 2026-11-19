@@ -5,13 +5,13 @@ Devsy CLI v1.27.1 · host: openSUSE Tumbleweed x86_64
 
 ## Result
 
-| Target                 | Command                            | Artifact                           | Size   | Built here    | Verified                                                                    |
-| ---------------------- | ---------------------------------- | ---------------------------------- | ------ | ------------- | --------------------------------------------------------------------------- |
-| macOS x64              | `RCODESIGN=… npm run package:mac`  | `SiliconHarbor_mac_x64.zip`        | 180 MB | ✅            | ad-hoc signature on app + devsy, x86_64 Mach-O, symlinks kept               |
-| macOS arm64            | (same run)                         | `SiliconHarbor_mac_arm64.zip`      | 170 MB | ✅            | ad-hoc signature on app + devsy, arm64 Mach-O, symlinks kept                |
-| Windows x64            | `npm run package:win`              | `SiliconHarbor_win_x64.exe` (NSIS) | —      | ❌ needs Wine | —                                                                           |
-| Windows x64 (fallback) | `electron-builder --win zip --x64` | `SiliconHarbor_win_x64.zip`        | 200 MB | ✅            | contains `Silicon Harbor.exe` + `resources/bin/devsy.exe`                   |
-| Fedora x64             | `npm run package:linux`            | `SiliconHarbor_linux_x86_64.rpm`   | 120 MB | ✅            | `rpm -qip` ok; packaged app launched under Xvfb and found its bundled devsy |
+| Target                 | Command                            | Artifact                           | Size    | Built here            | Verified                                                                    |
+| ---------------------- | ---------------------------------- | ---------------------------------- | ------- | --------------------- | --------------------------------------------------------------------------- |
+| macOS x64              | `RCODESIGN=… npm run package:mac`  | `SiliconHarbor_mac_x64.zip`        | 180 MB  | ✅                    | ad-hoc signature on app + devsy, x86_64 Mach-O, symlinks kept               |
+| macOS arm64            | (same run)                         | `SiliconHarbor_mac_arm64.zip`      | 170 MB  | ✅                    | ad-hoc signature on app + devsy, arm64 Mach-O, symlinks kept                |
+| Windows x64            | `npm run package:win`              | `SiliconHarbor_win_x64.exe` (NSIS) | ~155 MB | ✅ in CI (Wine image) | —                                                                           |
+| Windows x64 (fallback) | `electron-builder --win zip --x64` | `SiliconHarbor_win_x64.zip`        | 200 MB  | ✅                    | contains `Silicon Harbor.exe` + `resources/bin/devsy.exe`                   |
+| Fedora x64             | `npm run package:linux`            | `SiliconHarbor_linux_x86_64.rpm`   | 120 MB  | ✅                    | `rpm -qip` ok; packaged app launched under Xvfb and found its bundled devsy |
 
 **Not yet tested on real macOS/Windows machines.** That is the next manual step
 (test machines are available).
@@ -43,14 +43,11 @@ No step compiles native code: there are no native Node modules, the Devsy CLI is
 
 ## Caveats and findings
 
-- **Wine is needed for the NSIS installer.** Wine isn't installed on this
-  machine, and running `electronuserland/builder:22-wine-10.26` locally was
-  blocked by the sandbox, so the installer itself is **not verified yet**.
-  Everything before the uninstaller step works: the NSIS app archive was
-  produced, and the zip target proves the Windows app layout.
-  CI installs Wine via apt (unverified). The fallback is to run the Windows
-  packaging step in the `electronuserland/builder:wine` image.
-  Once Wine is available anyway, `signAndEditExecutable` could be turned back
+- **Wine is needed for the NSIS installer.** CI runs the electron-builder
+  step for Windows in `electronuserland/builder:22-wine-10.26` (pinned by
+  digest), because the ubuntu-24.04 runner's apt sources don't offer Wine.
+  The installer builds there (verified 2026-11-19); locally, use the same image
+  or Wine from your distribution. Now that Wine is available anyway, `signAndEditExecutable` could be turned back
   on to set the exe icon and version info (signing stays off).
 - **No exe metadata or icon on Windows** (`signAndEditExecutable: false`): the
   exe shows Electron's default icon and version info.
@@ -92,8 +89,8 @@ runners only:
   (after allowing unprivileged user namespaces, which Ubuntu 24.04 blocks and
   Chromium's sandbox needs).
 - `package` job, a matrix over mac/win/linux: installs rcodesign (checksum-verified) /
-  Wine / rpm as needed, runs `npm run package:<target> -- --publish never`, and
-  uploads the package as a run artifact. Devsy downloads are cached per pin.
+  rpm as needed, runs `npm run package:<target> -- --publish never` (Windows:
+  electron-builder in the Wine image), and uploads the package as a run artifact. Devsy downloads are cached per pin.
 - `release` job, only for `v*` tags: checks that the tag matches
   `package.json`'s version, then creates a **draft** GitHub release with the
   three packages and a `SHA256SUMS` file. Publish it by hand.
