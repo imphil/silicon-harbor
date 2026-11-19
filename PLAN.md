@@ -288,6 +288,18 @@ documented; all spikes green or with a written workaround.
 - Remaining M0: NSIS via Wine; first manual install on the macOS and Windows test machines; real-world spikes
   (github.ibm.com repo + icr.io + IDEs + X11) on those machines; app icons.
 
+### M1 + M3 status (2026-11-19)
+- M1 engine done (`docs/engine.md`): CLI runner with allow-listed env + `LC_ALL=C`, docker provider bootstrap,
+  detached up/stop/delete/cancel with re-attach, five-step progress, status polling + file watch, per-environment
+  logs, error catalog, settings, diagnostics, open IDE/terminal. Opt-in Docker integration test passed locally.
+- M3 UI done: all screens from the mockups, mock backend (`npm run dev:mock`) with fixture-based scenarios.
+- Integrated: 102 unit tests + 14 e2e tests (mock flows and the real backend) green; tests use a throwaway Electron
+  profile and Devsy home.
+- Known gaps: setup/build output reaches the log only after an `up` finishes; "Open terminal" untested on
+  macOS/Windows; Check-for-updates disabled; contract wishes from M3 — `copyDiagnostics` should report what was
+  copied, and a way to dismiss a failed create without deleting it.
+- Risk noted: proxy variables with embedded credentials are passed to Devsy and end up in its task state.
+
 ### M1 — Engine integration (weeks 3–4, Track A)
 
 Tasks
