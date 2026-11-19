@@ -3,7 +3,11 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
-import { formatRun, NodeHost } from "../requirements/host"
+import {
+  formatRun,
+  NodeHost,
+  windowsExecutableNames,
+} from "../requirements/host"
 import { SetupLog } from "../setup-log"
 
 const dirs: string[] = []
@@ -70,6 +74,40 @@ describe("NodeHost.run", () => {
   it("reports a missing executable", async () => {
     const res = await host().run("sh-definitely-missing-4711", [])
     expect(res.notFound).toBe(true)
+  })
+})
+
+describe("NodeHost.which on Windows", () => {
+  it("finds the .cmd launcher, not the shell script next to it", async () => {
+    // An IDE's bin folder, e.g. IBM Bob: bobide (for Git Bash) + bobide.cmd.
+    const bin = tempDir()
+    writeFileSync(join(bin, "bobide"), "#!/usr/bin/env sh\n")
+    writeFileSync(join(bin, "bobide.cmd"), "@echo off\r\n")
+    const host = new NodeHost({
+      platform: "win32",
+      homeDir: tmpdir(),
+      userName: "",
+      openExternal: async () => {},
+      env: { PATH: bin, PATHEXT: ".COM;.EXE;.BAT;.CMD" },
+    })
+    expect(await host.which("bobide")).toBe(join(bin, "bobide.cmd"))
+    expect(await host.which("missing")).toBeNull()
+  })
+
+  it("lists the names Windows would run", () => {
+    expect(windowsExecutableNames("code", ".COM;.EXE;.CMD")).toEqual([
+      "code.com",
+      "code.exe",
+      "code.cmd",
+    ])
+    expect(windowsExecutableNames("rdctl.exe", ".EXE;.CMD")).toEqual([
+      "rdctl.exe",
+    ])
+    expect(windowsExecutableNames("git")).toEqual([
+      "git.exe",
+      "git.cmd",
+      "git.bat",
+    ])
   })
 })
 

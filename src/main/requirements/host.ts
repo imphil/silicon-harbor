@@ -200,13 +200,13 @@ export class NodeHost implements Host {
       Object.entries(this.env).find(([k]) => k.toUpperCase() === "PATH")?.[1] ??
       ""
     const dirs = [...extraDirs, ...pathVar.split(delimiter)].filter(Boolean)
-    const exts =
+    const names =
       this.platform === "win32"
-        ? ["", ...(this.env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";")]
-        : [""]
+        ? windowsExecutableNames(name, this.env.PATHEXT)
+        : [name]
     for (const dir of dirs) {
-      for (const ext of exts) {
-        const candidate = join(dir, name + ext.toLowerCase())
+      for (const file of names) {
+        const candidate = join(dir, file)
         try {
           await access(
             candidate,
@@ -307,4 +307,23 @@ function quoteArg(arg: string): string {
   return /[\s"]/.test(oneLine)
     ? JSON.stringify(oneLine.replace(/\r?\n/g, " ⏎ "))
     : oneLine
+}
+
+/**
+ * File names Windows would run for a command name: the name with each
+ * PATHEXT extension, or the name itself if it already has one. Never the
+ * bare name otherwise: VS Code-style IDEs ship an extensionless shell script
+ * (for Git Bash) next to `code.cmd`, which Windows cannot run.
+ */
+export function windowsExecutableNames(
+  name: string,
+  pathext = ".EXE;.CMD;.BAT",
+): string[] {
+  const exts = pathext
+    .split(";")
+    .map((e) => e.trim().toLowerCase())
+    .filter((e) => e.startsWith("."))
+  const lower = name.toLowerCase()
+  if (exts.some((e) => lower.endsWith(e))) return [name]
+  return exts.map((e) => name + e)
 }
