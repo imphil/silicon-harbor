@@ -50,6 +50,18 @@ describe("parseLine", () => {
 })
 
 describe("DevsyClient", () => {
+  it("asks for a volume clone with --clone-into-volume", async () => {
+    const cli = new FixtureCli(by({ "workspace up": "a-up-submit" }))
+    await new DevsyClient(cli).submitUp({ source: "x", cloneIntoVolume: true })
+    expect(cli.calls[0]).toEqual([
+      "workspace",
+      "up",
+      "x",
+      "--clone-into-volume",
+      "--detach",
+    ])
+  })
+
   it("submits a detached up with id, ide and launch mode", async () => {
     const cli = new FixtureCli(by({ "workspace up": "a-up-submit" }))
     const task = await new DevsyClient(cli).submitUp({

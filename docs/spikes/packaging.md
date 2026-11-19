@@ -73,9 +73,9 @@ No step compiles native code: there are no native Node modules, the Devsy CLI is
 - **RPM metadata:** `homepage` is a placeholder (`https://www.ibm.com/`) until the
   repository location is decided; electron-builder refuses to build an RPM without
   one. License shows "unknown".
-- **Devsy binary checksums are trust-on-first-use.** The Devsy release publishes
-  no checksum file. The hashes in `devsy.json` were computed from the v1.27.1
-  downloads on 2026-11-19. A checksums asset upstream would be a good addition.
+- **Devsy binary checksums** come from the asset `digest` in the GitHub release
+  API of our fork `imphil/devsy`. (Originally, for upstream v1.27.1, they were
+  trust-on-first-use hashes of our own downloads.)
 - **`DEVSY_LOCAL_DIST`** lets you package a local Devsy build for testing, but
   it isn't checksum-verified (a warning is printed). Windows: the local Devsy
   `dist/` has no `devsy-dev_windows_*` output, so local mode fails for

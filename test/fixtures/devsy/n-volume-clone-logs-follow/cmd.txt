@@ -1,0 +1,2 @@
+devsy workspace task logs ivtsrgseauvz --follow --log-level info --log-output json
+# up submitted with --clone-into-volume (imphil/devsy main-fork 3aa9b5c4a = v1.27.1-phw.2, built locally)

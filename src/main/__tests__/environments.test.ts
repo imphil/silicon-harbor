@@ -43,7 +43,10 @@ afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true })
 })
 
-function setup(script: Script) {
+function setup(
+  script: Script,
+  extra: Partial<ConstructorParameters<typeof EnvironmentService>[0]> = {},
+) {
   const dir = mkdtempSync(join(tmpdir(), "sh-env-"))
   dirs.push(dir)
   const cli = new FixtureCli(script.respond)
@@ -57,6 +60,7 @@ function setup(script: Script) {
     onLog: (id, line) => logs.push({ id, line }),
     listIntervalMs: 3_600_000,
     statusIntervalMs: 3_600_000,
+    ...extra,
   })
   services.push(service)
   const env = (id: string) => service.get(id)
@@ -204,6 +208,44 @@ describe("EnvironmentService", () => {
       "--id",
       id,
     ])
+  })
+
+  it("clones into a volume only when creating, if enabled", async () => {
+    const script = baseScript()
+      .set("workspace up", "i1-clone-fail-submit")
+      .set("workspace task logs", "i2-clone-fail-logs")
+    const { cli, service, env, until } = setup(script, {
+      cloneIntoVolume: true,
+    })
+    const ups = () => cli.calls.filter((c) => c[1] === "up")
+    const { id } = await service.create({ repoUrl: REPO })
+    await until(() => env(id)?.state === "failed", "failed")
+    // A retried creation is still a creation.
+    await service.startEnv(id)
+    await until(
+      () => env(id)?.state === "failed" && ups().length === 2,
+      "retry",
+    )
+    expect(ups()[0]).toContain("--clone-into-volume")
+    expect(ups()[1]).toContain("--clone-into-volume")
+  })
+
+  it("does not ask for a volume clone for an existing workspace", async () => {
+    const script = baseScript()
+      .set("workspace list", "d2-list-running")
+      .set("workspace status", "e2-status-running")
+      .set("workspace up", "a-up-submit")
+      .set("workspace task logs", "b-task-logs-follow")
+    const { cli, service, env, until } = setup(script, {
+      cloneIntoVolume: true,
+    })
+    await service.start()
+    await until(() => env("try-python")?.state === "running", "listed")
+    await service.rebuild("try-python")
+    await until(() => cli.calls.some((c) => c[1] === "up"), "rebuild")
+    expect(cli.calls.find((c) => c[1] === "up")).not.toContain(
+      "--clone-into-volume",
+    )
   })
 
   it("shows a failed image pull on the download step", async () => {

@@ -43,6 +43,11 @@ export interface EnvironmentServiceOptions {
   ideOverride?: string
   /** Passed as --ssh-config (integration tests); default: Devsy's (~/.ssh/config). */
   sshConfigPath?: string
+  /**
+   * New environments clone their source into a Docker volume instead of a
+   * host folder (macOS/Windows: avoids the slow host↔VM file sharing).
+   */
+  cloneIntoVolume?: boolean
   /** DEVSY_HOME, watched for changes made by other Devsy clients. */
   watchDir?: string
   listIntervalMs?: number
@@ -261,6 +266,7 @@ export class EnvironmentService {
       source: req.branch ? `${req.repoUrl}@${req.branch}` : req.repoUrl,
       id: record.id,
       displayName,
+      cloneIntoVolume: this.opts.cloneIntoVolume,
     })
   }
 

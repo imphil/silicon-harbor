@@ -24,14 +24,14 @@ settings-store.ts · diagnostics.ts · terminal.ts
 
 ## Operations
 
-| API               | Devsy                                                                                                                  | Notes                                                                    |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| create            | `workspace up <url>[@branch] --id <id> [--display-name] --ide <ide> --ide-launch auto --detach` → `task logs --follow` | id is made unique first: `up --id` silently reuses an existing workspace |
-| start / openInIde | `workspace up <id> --ide <ide> --detach` → follow                                                                      | openInIde with another IDE runs `workspace set-ide` first                |
-| rebuild           | `workspace up <id> --recreate --detach` → follow                                                                       |                                                                          |
-| stop / delete     | `workspace stop                                                                                                        | delete <id>` (streams status events)                                     | delete of a missing workspace (exit 75) counts as success |
-| cancel            | `workspace task cancel <taskId>` (or kills stop/delete)                                                                |                                                                          |
-| re-attach         | `workspace task list` on start → follow running `up` tasks                                                             |                                                                          |
+| API               | Devsy                                                                                                                                        | Notes                                                                                                                                 |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| create            | `workspace up <url>[@branch] --id <id> [--display-name] --ide <ide> --ide-launch auto [--clone-into-volume] --detach` → `task logs --follow` | id is made unique first: `up --id` silently reuses an existing workspace. `--clone-into-volume` on macOS and Windows only (see below) |
+| start / openInIde | `workspace up <id> --ide <ide> --detach` → follow                                                                                            | openInIde with another IDE runs `workspace set-ide` first                                                                             |
+| rebuild           | `workspace up <id> --recreate --detach` → follow                                                                                             |                                                                                                                                       |
+| stop / delete     | `workspace stop                                                                                                                              | delete <id>` (streams status events)                                                                                                  | delete of a missing workspace (exit 75) counts as success |
+| cancel            | `workspace task cancel <taskId>` (or kills stop/delete)                                                                                      |                                                                                                                                       |
+| re-attach         | `workspace task list` on start → follow running `up` tasks                                                                                   |                                                                                                                                       |
 
 Before the first `up`: `provider list` → (`provider add docker --use=false`, `provider init docker`) →
 `provider use docker`.
@@ -79,3 +79,29 @@ operation. Setup output (`workspace logs --source setup --run <runId>`) is appen
 - Live build output: setup logs are fetched after an `up`, not streamed while it runs.
 - Requirements (`checkRequirements`/`fixRequirement`) are stubs until M2.
 - `openTerminal` is untested on macOS/Windows.
+
+## Source in a Docker volume (macOS, Windows)
+
+On macOS and Windows, new environments are created with `--clone-into-volume`
+(our Devsy fork). Devsy then clones the repository into a named Docker volume,
+using a short-lived `docker:27-cli` bootstrap container, instead of into a
+folder on the host that is bind-mounted into the container. Docker runs in a VM
+on both platforms (Rancher Desktop, WSL 2), and file access across that
+boundary is slow.
+
+- The flag is only passed on create, and on a retried create. Devsy decides
+  this once when it creates the workspace and ignores the flag, with a warning,
+  for an existing one.
+- No copy of the source exists on the host. Edits live in the volume and are
+  visible only through the IDE or a terminal in the environment.
+- All workspaces of the same repository share one content volume, each with its
+  own worktree. Deleting an environment removes its worktree, and the volume
+  once no worktree is left.
+- Progress: the clone and container start run in a nested `up` inside the
+  bootstrap container. Its phases only reach the CLI with the fork's bootstrap
+  status fix (our fork from v1.27.1-phw.2); without it the stream starts
+  at `configuring_workspace`. Fixture: `test/fixtures/devsy/n-volume-clone-logs-follow`.
+- Not used on Fedora: Docker runs natively, and the host folder is fast and
+  visible to host tools.
+
+Set in `src/main/index.ts` (`cloneIntoVolumeFor`).

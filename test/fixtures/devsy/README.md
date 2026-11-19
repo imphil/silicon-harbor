@@ -21,4 +21,5 @@ Redacted placeholders: `$DEVSY_HOME`, `$SCRATCH`, `$HOME`, `$USER`, `$HOSTNAME`.
 | `k*` | cancel a running `up` |
 | `l*` | setup log store: list runs, read latest run |
 | `m*` | Docker daemon unreachable |
+| `n*` | `up --clone-into-volume` (source in a Docker volume, via a bootstrap container); our fork with the bootstrap status fix |
 | `x-*` | DEVSY_HOME too long → agent socket path limit (recorded with a long home) |

@@ -2,7 +2,8 @@
 
 Development environments for IBM chip developers: paste a Git URL, get a working
 environment open in IBM Bob, VS Code or VSCodium. Built on
-[Devsy](https://github.com/devsy-org/devsy).
+[Devsy](https://github.com/devsy-org/devsy), using the CLI from our fork
+[imphil/devsy](https://github.com/imphil/devsy).
 
 Status: M0 (foundations). See [PLAN.md](PLAN.md).
 
@@ -75,5 +76,9 @@ Output goes to `release/`. Tool requirements and caveats are in
 [docs/spikes/packaging.md](docs/spikes/packaging.md). CI runs the same commands
 on ubuntu runners: [.github/workflows/build.yml](.github/workflows/build.yml).
 
-To update Devsy: change `version` in `resources/devsy/devsy.json`, put the new
-SHA-256 for each asset there, and run `npm run fetch-devsy`.
+To update Devsy: tag a release in [imphil/devsy](https://github.com/imphil/devsy),
+change `version` in `resources/devsy/devsy.json`, put each asset's SHA-256 there
+(the `digest` of the asset in the GitHub release API, not a hash of your own
+download), and run `npm run fetch-devsy`. The fork's CLI downloads its
+in-container agent from the same release, so the release must keep the Linux
+assets.

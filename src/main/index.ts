@@ -65,6 +65,9 @@ function startBackend(): void {
     logs,
     settings: () => settings.get(),
     watchDir: devsyHome,
+    // Docker runs in a VM on macOS and Windows; a bind-mounted source is
+    // slow there. On Linux the host folder is native and stays visible.
+    cloneIntoVolume: cloneIntoVolumeFor(process.platform),
     onChange: (envs) => broadcast(IpcChannel.evtEnvironments, envs),
     onLog: (id, line) => broadcast(IpcChannel.evtLog, { id, line }),
   })
@@ -102,6 +105,10 @@ function startBackend(): void {
   })
   void environments.start()
   void requirements.check()
+}
+
+function cloneIntoVolumeFor(platform: NodeJS.Platform): boolean {
+  return platform === "darwin" || platform === "win32"
 }
 
 function currentUserName(): string {

@@ -63,6 +63,24 @@ describe("progress", () => {
     })
   })
 
+  it("shows every step for a clone into a Docker volume", () => {
+    const p = createProgress("create")
+    const seen: string[] = []
+    for (const e of statusEvents("n-volume-clone-logs-follow")) {
+      applyStatus(p, e)
+      const active = p.steps.find((s) => s.state === "active")
+      if (active && seen.at(-1) !== active.id) seen.push(active.id)
+    }
+    expect(seen).toEqual(["clone", "start", "prepare", "ide"])
+    expect(states(p)).toEqual({
+      check: "done",
+      clone: "done",
+      start: "done",
+      prepare: "done",
+      ide: "done",
+    })
+  })
+
   it("shows plain-language details for the active phase", () => {
     const p = createProgress("create")
     for (const e of statusEvents("b-task-logs-follow")) {

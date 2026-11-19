@@ -108,6 +108,12 @@ export interface UpArgs {
   ideLaunch?: "auto" | "headless" | "skip"
   recreate?: boolean
   sshConfigPath?: string
+  /**
+   * --clone-into-volume (our Devsy fork): clone into a Docker volume instead of
+   * a host folder. Decided at creation; Devsy ignores it (with a warning) for
+   * an existing workspace.
+   */
+  cloneIntoVolume?: boolean
 }
 
 export interface FollowCallbacks {
@@ -162,6 +168,7 @@ export class DevsyClient {
     if (args.ideLaunch) cliArgs.push("--ide-launch", args.ideLaunch)
     if (args.recreate) cliArgs.push("--recreate")
     if (args.sshConfigPath) cliArgs.push("--ssh-config", args.sshConfigPath)
+    if (args.cloneIntoVolume) cliArgs.push("--clone-into-volume")
     cliArgs.push("--detach")
     return parseJson(await this.run(cliArgs, 60_000), TaskEnvelopeSchema)
   }
