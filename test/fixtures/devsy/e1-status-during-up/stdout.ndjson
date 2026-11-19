@@ -1,0 +1,1 @@
+{"id":"try-python","context":"default","provider":"docker","state":"Provisioning","lastOperation":{"timestamp":"2026-11-19T11:15:14.694145279Z","pipeline":"workspace_up","phase":"initialize_command","state":"succeeded"}}

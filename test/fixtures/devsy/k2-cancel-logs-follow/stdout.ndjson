@@ -1,0 +1,12 @@
+{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-1","phase":"resolving_config","state":"started"}
+{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-1","phase":"resolving_config","state":"succeeded"}
+{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-2","phase":"initialize_command","state":"started"}
+{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-2","phase":"initialize_command","state":"succeeded"}
+{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-3","phase":"preparing_devcontainer","state":"started"}
+{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-4","parentOperationId":"op-3","phase":"starting_container","state":"started"}
+{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-4","parentOperationId":"op-3","phase":"starting_container","state":"succeeded","durationMs":2876}
+{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-5","parentOperationId":"op-3","phase":"injecting_agent","state":"started"}
+{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-5","parentOperationId":"op-3","phase":"injecting_agent","state":"succeeded","durationMs":3293}
+{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-6","parentOperationId":"op-3","phase":"running_lifecycle_hook","state":"started"}
+{"kind":"status","schemaVersion":1,"operationId":"op-6","parentOperationId":"op-3","phase":"running_lifecycle_hook","state":"started"}
+{"kind":"status","schemaVersion":1,"operationId":"op-6","parentOperationId":"op-3","phase":"running_lifecycle_hook","state":"failed","error":{"code":"canceled","message":"canceled","hint":"Retry the operation when ready."}}

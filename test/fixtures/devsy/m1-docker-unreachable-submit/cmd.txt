@@ -1,0 +1,2 @@
+devsy workspace up $SCRATCH/slow --id no-docker --ide none --ide-launch skip --ssh-config $SCRATCH/ssh_config --provider-option DOCKER_HOST=unix:///tmp/silicon-harbor-no-such-docker.sock --detach --log-level info --log-output json --result-format json
+# duration-ms: 163

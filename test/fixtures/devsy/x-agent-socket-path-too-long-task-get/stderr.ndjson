@@ -1,0 +1,1 @@
+{"kind":"error","outcome":"error","code":"UNKNOWN","message":"start workspace: run agent command failed: exit status 1: Process exited with status 1","context":{"runId":"d99b6dc1-b876-41bd-ab7a-ba5e48c75615"}}

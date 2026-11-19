@@ -1,0 +1,50 @@
+{
+  "name": "silicon-harbor",
+  "productName": "Silicon Harbor",
+  "version": "0.0.1",
+  "description": "Development environments for IBM chip developers, powered by Devsy",
+  "homepage": "https://www.ibm.com/",
+  "private": true,
+  "author": {
+    "name": "Silicon Harbor maintainers",
+    "email": "silicon-harbor@example.invalid"
+  },
+  "type": "module",
+  "main": "dist/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "fetch-devsy": "node scripts/fetch-devsy.mjs",
+    "package:mac": "npm run build && node scripts/fetch-devsy.mjs --targets mac-x64,mac-arm64 && electron-builder --mac zip --x64 --arm64",
+    "package:win": "npm run build && node scripts/fetch-devsy.mjs --targets win-x64 && electron-builder --win nsis --x64",
+    "package:linux": "npm run build && node scripts/fetch-devsy.mjs --targets linux-x64 && electron-builder --linux rpm --x64",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "svelte-check --tsconfig src/renderer/tsconfig.json && tsc --noEmit -p tsconfig.json",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "postinstall": "install-electron",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.4",
+    "@ibm/plex": "6.4.1",
+    "@playwright/test": "1.63.0",
+    "@sveltejs/vite-plugin-svelte": "6.2.4",
+    "@testing-library/svelte": "5.4.2",
+    "@types/node": "24.19.2",
+    "carbon-components-svelte": "0.114.3",
+    "carbon-icons-svelte": "13.18.0",
+    "electron": "44.5.1",
+    "electron-builder": "26.17.0",
+    "electron-vite": "5.0.0",
+    "jsdom": "30.1.3",
+    "svelte": "5.57.2",
+    "svelte-check": "4.7.7",
+    "svelte-spa-router": "5.1.1",
+    "typescript": "6.0.3",
+    "vite": "7.3.7",
+    "vitest": "4.1.12"
+  }
+}

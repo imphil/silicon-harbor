@@ -1,0 +1,2 @@
+devsy workspace task logs digfmlhzraca --follow --log-level info --log-output json
+# duration-ms: 581

@@ -1,0 +1,9 @@
+node_modules/
+dist/
+release/
+.cache/
+resources/bin/
+test-results/
+playwright-report/
+*.tmp.mjs
+.DS_Store

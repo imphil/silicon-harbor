@@ -1,0 +1,2 @@
+devsy workspace delete image-fail --log-level info --log-output json --result-format json
+# duration-ms: 765

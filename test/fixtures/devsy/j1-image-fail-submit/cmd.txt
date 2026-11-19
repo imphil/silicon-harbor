@@ -1,0 +1,2 @@
+devsy workspace up $SCRATCH/badimage --id image-fail --ide none --ide-launch skip --ssh-config $SCRATCH/ssh_config --detach --log-level info --log-output json --result-format json
+# duration-ms: 126

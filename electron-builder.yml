@@ -1,0 +1,74 @@
+# Packaging for all targets runs on Linux. See docs/spikes/packaging.md.
+appId: com.ibm.siliconharbor
+productName: Silicon Harbor
+copyright: Copyright © 2026 IBM
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - dist/**/*
+  - package.json
+
+# scripts/fetch-devsy.mjs writes one Devsy binary per target; electron-builder
+# expands ${os}-${arch} (mac/win/linux, x64/arm64) per build.
+extraResources:
+  - from: resources/bin/${os}-${arch}/
+    to: bin/
+    filter:
+      - "**/*"
+
+# Ad-hoc signs the macOS .app with rcodesign (no Apple tooling needed).
+afterPack: scripts/after-pack.cjs
+
+mac:
+  category: public.app-category.developer-tools
+  artifactName: SiliconHarbor_mac_${arch}.${ext}
+  target:
+    - zip
+  # No Apple identity: electron-builder's own signing is skipped; the
+  # afterPack hook applies an ad-hoc signature instead.
+  identity: null
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  notarize: false
+
+win:
+  artifactName: SiliconHarbor_win_${arch}.${ext}
+  target:
+    - target: nsis
+      arch:
+        - x64
+  # Editing the .exe (icon, version info) and signing need Wine/osslsigncode
+  # on Linux. Skipped until we have an IBM signing service.
+  signAndEditExecutable: false
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+
+linux:
+  category: Development
+  artifactName: SiliconHarbor_linux_${arch}.${ext}
+  maintainer: Silicon Harbor maintainers
+  vendor: IBM
+  synopsis: Development environments for IBM chip developers
+  target:
+    - target: rpm
+      arch:
+        - x64
+
+rpm:
+  # The bundled Devsy binary is a static Go binary; Electron's runtime deps
+  # are the usual GTK/NSS set that Fedora workstations already have.
+  depends:
+    - gtk3
+    - libnotify
+    - nss
+    - libXScrnSaver
+    - libXtst
+    - xdg-utils
+    - at-spi2-core
+    - libuuid

@@ -1,0 +1,2 @@
+devsy workspace task logs klvimdnmndcl --follow --log-level info --log-output json
+# duration-ms: 1082

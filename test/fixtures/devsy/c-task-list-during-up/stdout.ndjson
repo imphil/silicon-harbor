@@ -1,0 +1,25 @@
+[
+  {
+    "id": "iqauycmxoilv",
+    "command": "up",
+    "workspaceId": "try-python",
+    "runId": "c70e50f1-9c16-473f-9d4d-c21db08f3615",
+    "status": "running",
+    "phase": "starting_container",
+    "operationId": "op-5",
+    "parentOperationId": "op-4",
+    "pid": 2031831,
+    "processTreeIdentity": "2031831:18160948",
+    "process": {
+      "pid": 2031831,
+      "treeKind": "unix-group-v1",
+      "treeId": "2031831",
+      "identity": "2031831:18160948"
+    },
+    "launchProtocol": 1,
+    "workerReady": true,
+    "launchOwned": true,
+    "startedAt": "2026-11-19T12:15:11.581845834+01:00",
+    "updatedAt": "2026-11-19T12:15:14.705701251+01:00"
+  }
+]

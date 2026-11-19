@@ -1,0 +1,2 @@
+devsy workspace task logs csfmkpfjicgb --follow --log-level info --log-output json
+# duration-ms: 2577

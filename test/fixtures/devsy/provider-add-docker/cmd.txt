@@ -1,0 +1,2 @@
+devsy provider add docker --use=false --log-level info --log-output json --result-format json
+# duration-ms: 505

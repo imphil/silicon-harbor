@@ -1,0 +1,2 @@
+devsy workspace delete cancel-me --log-level info --log-output json --result-format json
+# duration-ms: 2381

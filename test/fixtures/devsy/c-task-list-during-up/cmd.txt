@@ -1,0 +1,2 @@
+devsy workspace task list --log-level info --log-output json --result-format json
+# duration-ms: 89

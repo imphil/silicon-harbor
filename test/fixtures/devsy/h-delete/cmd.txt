@@ -1,0 +1,2 @@
+devsy workspace delete try-python --log-level info --log-output json --result-format json
+# duration-ms: 1187

@@ -1,0 +1,12 @@
+{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-1","phase":"deleting_workspace","state":"started"}
+{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-2","parentOperationId":"op-1","phase":"deleting_workspace","step":"Waiting for workspace lock","state":"started"}
+{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-2","parentOperationId":"op-1","phase":"deleting_workspace","step":"Waiting for workspace lock","state":"succeeded"}
+{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-3","parentOperationId":"op-1","phase":"deleting_workspace","step":"Checking workspace status","state":"started"}
+{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-3","parentOperationId":"op-1","phase":"deleting_workspace","step":"Checking workspace status","state":"succeeded"}
+{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-4","parentOperationId":"op-1","phase":"stopping_workspace","step":"Stopping before deletion","state":"started"}
+{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-4","parentOperationId":"op-1","phase":"stopping_workspace","step":"Stopping before deletion","state":"succeeded","durationMs":1954}
+{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-5","parentOperationId":"op-1","phase":"deleting_workspace","step":"Removing workspace resources","state":"started"}
+{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-5","parentOperationId":"op-1","phase":"deleting_workspace","step":"Removing workspace resources","state":"succeeded","durationMs":355}
+{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-6","parentOperationId":"op-1","phase":"deleting_workspace","step":"Cleaning local files","state":"started"}
+{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-6","parentOperationId":"op-1","phase":"deleting_workspace","step":"Cleaning local files","state":"succeeded"}
+{"kind":"status","schemaVersion":1,"pipeline":"workspace_up","operationId":"op-1","phase":"deleting_workspace","state":"succeeded","durationMs":2313}

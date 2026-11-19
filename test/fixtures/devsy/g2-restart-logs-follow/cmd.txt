@@ -1,0 +1,2 @@
+devsy workspace task logs eilultsdjghz --follow --log-level info --log-output json
+# duration-ms: 4079

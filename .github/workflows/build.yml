@@ -1,0 +1,85 @@
+name: build
+
+# Everything runs on Linux: checks, tests and packaging for macOS, Windows and
+# Fedora. See docs/spikes/packaging.md for why this works without macOS or
+# Windows runners.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  # carbon-components-svelte and @ibm/plex run IBM telemetry in postinstall.
+  IBM_TELEMETRY_DISABLED: "true"
+  RCODESIGN_VERSION: "0.29.0"
+  RCODESIGN_SHA256: "dbe85cedd8ee4217b64e9a0e4c2aef92ab8bcaaa41f20bde99781ff02e600002"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run check
+      - run: npm test
+      - run: npm run build
+      - name: Electron smoke test
+        run: xvfb-run -a npm run test:e2e
+
+  package:
+    needs: check
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [mac, win, linux]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      - name: Install rcodesign (macOS ad-hoc signing)
+        if: matrix.target == 'mac'
+        run: |
+          set -euo pipefail
+          name="apple-codesign-${RCODESIGN_VERSION}-x86_64-unknown-linux-musl"
+          curl -fsSL -o /tmp/rcodesign.tar.gz \
+            "https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F${RCODESIGN_VERSION}/${name}.tar.gz"
+          echo "${RCODESIGN_SHA256}  /tmp/rcodesign.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/rcodesign.tar.gz -C /tmp
+          echo "RCODESIGN=/tmp/${name}/rcodesign" >> "$GITHUB_ENV"
+
+      # electron-builder runs the 32-bit NSIS stub under Wine to generate the
+      # uninstaller, even with signAndEditExecutable: false. Not yet verified
+      # on a runner; alternative: run this step in electronuserland/builder:wine.
+      - name: Install Wine (NSIS uninstaller generation)
+        if: matrix.target == 'win'
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends wine wine64 wine32:i386
+
+      - name: Install rpmbuild
+        if: matrix.target == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends rpm
+
+      - run: npm run package:${{ matrix.target }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: silicon-harbor-${{ matrix.target }}
+          path: |
+            release/*.zip
+            release/*.exe
+            release/*.rpm
+          if-no-files-found: error

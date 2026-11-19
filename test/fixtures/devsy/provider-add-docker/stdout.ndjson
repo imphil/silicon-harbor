@@ -1,0 +1,2 @@
+{"kind":"status","schemaVersion":1,"pipeline":"provider","operationId":"op-1","phase":"installing_provider","step":"docker","state":"started"}
+{"kind":"status","schemaVersion":1,"pipeline":"provider","operationId":"op-1","phase":"installing_provider","step":"docker","state":"succeeded","durationMs":431}

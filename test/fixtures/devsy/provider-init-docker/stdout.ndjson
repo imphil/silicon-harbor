@@ -1,0 +1,6 @@
+{"kind":"status","schemaVersion":1,"pipeline":"provider","operationId":"op-1","phase":"ready","step":"docker","state":"started"}
+{"kind":"status","schemaVersion":1,"pipeline":"provider","operationId":"op-2","parentOperationId":"op-1","phase":"resolving_options","step":"docker","state":"started"}
+{"kind":"status","schemaVersion":1,"pipeline":"provider","operationId":"op-2","parentOperationId":"op-1","phase":"resolving_options","step":"docker","state":"succeeded"}
+{"kind":"status","schemaVersion":1,"pipeline":"provider","operationId":"op-3","parentOperationId":"op-1","phase":"running_init","step":"docker","state":"started"}
+{"kind":"status","schemaVersion":1,"pipeline":"provider","operationId":"op-3","parentOperationId":"op-1","phase":"running_init","step":"docker","state":"succeeded"}
+{"kind":"status","schemaVersion":1,"pipeline":"provider","operationId":"op-1","phase":"ready","step":"docker","state":"succeeded","durationMs":1}

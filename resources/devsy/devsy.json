@@ -1,0 +1,22 @@
+{
+  "version": "v1.27.1",
+  "baseUrl": "https://github.com/devsy-org/devsy/releases/download",
+  "binaries": {
+    "mac-x64": {
+      "asset": "devsy-darwin-amd64",
+      "sha256": "7fd018a8d0c556b0f3f30220c4da0b1053024f68760625de79cee0be56012179"
+    },
+    "mac-arm64": {
+      "asset": "devsy-darwin-arm64",
+      "sha256": "1fb576ce577210d8935c2f53c6e8005900ababf06cab404e17e4f242b1a70438"
+    },
+    "win-x64": {
+      "asset": "devsy-windows-amd64.exe",
+      "sha256": "11e779c2561b47d7a185d8b4a2acfde42d13e1f03de41a8ccdd144d7ec654837"
+    },
+    "linux-x64": {
+      "asset": "devsy-linux-amd64",
+      "sha256": "2be0800ab69b8f53c67ff9e668364b332cd4aa5952a3d3a36d8914ddf7ebd541"
+    }
+  }
+}

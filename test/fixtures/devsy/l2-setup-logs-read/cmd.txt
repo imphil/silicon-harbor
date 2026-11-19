@@ -1,0 +1,2 @@
+devsy workspace logs try-python --source setup --run latest --context default --log-level info --log-output json --result-format json
+# duration-ms: 610

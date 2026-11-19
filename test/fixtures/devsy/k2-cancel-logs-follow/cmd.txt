@@ -1,0 +1,2 @@
+devsy workspace task logs ipnkrnesmtjf --follow --log-level info --log-output json
+# duration-ms: 580

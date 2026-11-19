@@ -1,0 +1,173 @@
+[
+  {
+    "id": "iqauycmxoilv",
+    "command": "up",
+    "workspaceId": "try-python",
+    "runId": "c70e50f1-9c16-473f-9d4d-c21db08f3615",
+    "status": "succeeded",
+    "phase": "ready",
+    "operationId": "op-3",
+    "result": {
+      "DevContainerConfigWithPath": {
+        "config": {
+          "name": "Python 3",
+          "portsAttributes": {
+            "9000": {
+              "onAutoForward": "notify",
+              "label": "Hello Remote World"
+            }
+          },
+          "postCreateCommand": {
+            "": [
+              "pip3 install -r requirements.txt"
+            ]
+          },
+          "customizations": {
+            "vscode": {
+              "extensions": [
+                "streetsidesoftware.code-spell-checker"
+              ],
+              "settings": {}
+            }
+          },
+          "image": "mcr.microsoft.com/devcontainers/python:3-3.14-trixie"
+        },
+        "path": ".devcontainer/devcontainer.json"
+      },
+      "MergedConfig": {
+        "name": "Python 3",
+        "portsAttributes": {
+          "9000": {
+            "onAutoForward": "notify",
+            "label": "Hello Remote World"
+          }
+        },
+        "remoteEnv": {
+          "PATH": "/usr/local/python/current/bin:/usr/local/py-utils/bin:/usr/local/jupyter:/usr/local/share/nvm/current/bin:/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        },
+        "remoteUser": "vscode",
+        "shutdownAction": "stopContainer",
+        "postCreateCommand": [
+          {
+            "": [
+              "pip3 install -r requirements.txt"
+            ]
+          }
+        ],
+        "customizations": {
+          "vscode": [
+            {
+              "settings": {
+                "github.copilot.chat.codeGeneration.instructions": [
+                  {
+                    "text": "This dev container includes an up-to-date version of Git, built from source as needed, pre-installed and available on the `PATH`."
+                  }
+                ]
+              }
+            },
+            {
+              "extensions": [
+                "dbaeumer.vscode-eslint"
+              ],
+              "settings": {
+                "github.copilot.chat.codeGeneration.instructions": [
+                  {
+                    "text": "This dev container includes `node`, `npm` and `eslint` pre-installed and available on the `PATH` for Node.js and JavaScript development."
+                  }
+                ]
+              }
+            },
+            {
+              "extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "ms-python.autopep8"
+              ],
+              "settings": {
+                "[python]": {
+                  "editor.defaultFormatter": "ms-python.autopep8"
+                },
+                "github.copilot.chat.codeGeneration.instructions": [
+                  {
+                    "text": "This dev container includes `python3` and `pip3` pre-installed and available on the `PATH`, along with the Python language extensions for Python development."
+                  }
+                ],
+                "python.defaultInterpreterPath": "/usr/local/python/current/bin/python"
+              }
+            },
+            {
+              "settings": {
+                "python.defaultInterpreterPath": "/usr/local/bin/python"
+              }
+            },
+            {
+              "extensions": [
+                "streetsidesoftware.code-spell-checker"
+              ],
+              "settings": {}
+            }
+          ]
+        },
+        "image": "mcr.microsoft.com/devcontainers/python:3-3.14-trixie"
+      },
+      "SubstitutionContext": {
+        "DevContainerID": "1hjnm5uk9dc13ar3797lpa67nb3nhlq2vf89qf88ni2ufhmqu7dq",
+        "LocalWorkspaceFolder": "$DEVSY_HOME/contexts/default/contents/try-python",
+        "ContainerWorkspaceFolder": "/workspaces/try-python",
+        "Env": {
+          "REDACTED_BY_SILICON_HARBOR": "host environment (182 variables) removed from fixture"
+        },
+        "WorkspaceMount": "type=bind,source=$DEVSY_HOME/contexts/default/contents/try-python,target=/workspaces/try-python"
+      },
+      "ContainerDetails": {
+        "ID": "782dfd65386099b1c5d15ceadf328d85be8308bedcb937e8ed566c7241d1547b",
+        "Image": "sha256:4e646f40365f7a1086e64231d825da849c6f1db37349b06faa3dac4b50aa037d",
+        "Created": "2026-11-19T11:15:45.341473114Z",
+        "State": {
+          "Status": "running",
+          "StartedAt": "2026-11-19T11:15:46.996890458Z"
+        },
+        "Config": {
+          "Labels": {
+            "dev.containers.id": "default-tr-988a5",
+            "dev.containers.release": "v0.4.38",
+            "dev.containers.source": "https://github.com/devcontainers/images",
+            "dev.containers.timestamp": "Fri, 13 Nov 2026 10:18:40 GMT",
+            "dev.containers.variant": "3.14-trixie",
+            "devcontainer.metadata": "[{\"id\":\"ghcr.io/devcontainers/features/common-utils:2\"},{\"id\":\"ghcr.io/devcontainers/features/git:1\",\"customizations\":{\"vscode\":{\"settings\":{\"github.copilot.chat.codeGeneration.instructions\":[{\"text\":\"This dev container includes an up-to-date version of Git, built from source as needed, pre-installed and available on the `PATH`.\"}]}}}},{\"id\":\"ghcr.io/devcontainers/features/node:2\",\"customizations\":{\"vscode\":{\"extensions\":[\"dbaeumer.vscode-eslint\"],\"settings\":{\"github.copilot.chat.codeGeneration.instructions\":[{\"text\":\"This dev container includes `node`, `npm` and `eslint` pre-installed and available on the `PATH` for Node.js and JavaScript development.\"}]}}}},{\"id\":\"ghcr.io/devcontainers/features/python:1\",\"customizations\":{\"vscode\":{\"extensions\":[\"ms-python.python\",\"ms-python.vscode-pylance\",\"ms-python.autopep8\"],\"settings\":{\"[python]\":{\"editor.defaultFormatter\":\"ms-python.autopep8\"},\"github.copilot.chat.codeGeneration.instructions\":[{\"text\":\"This dev container includes `python3` and `pip3` pre-installed and available on the `PATH`, along with the Python language extensions for Python development.\"}],\"python.defaultInterpreterPath\":\"/usr/local/python/current/bin/python\"}}}},{\"remoteUser\":\"vscode\",\"customizations\":{\"vscode\":{\"settings\":{\"python.defaultInterpreterPath\":\"/usr/local/bin/python\"}}}},{\"portsAttributes\":{\"9000\":{\"onAutoForward\":\"notify\",\"label\":\"Hello Remote World\"}},\"postCreateCommand\":{\"\":[\"pip3 install -r requirements.txt\"]},\"customizations\":{\"vscode\":{\"extensions\":[\"streetsidesoftware.code-spell-checker\"],\"settings\":{}}}}]",
+            "devsy.overlay.structure": "v1:0b49968b94859f5c8273795fe4d6e8af706f715ba1e99e13ac39df69c45f18dc",
+            "devsy.user": "root",
+            "version": "3.3.3"
+          },
+          "User": "root",
+          "Image": "mcr.microsoft.com/devcontainers/python:3-3.14-trixie"
+        },
+        "Mounts": [
+          {
+            "Type": "bind",
+            "Source": "$DEVSY_HOME/contexts/default/contents/try-python",
+            "Destination": "/workspaces/try-python"
+          },
+          {
+            "Type": "volume",
+            "Source": "/var/lib/docker/volumes/devsy-agent-default-tr-988a5/_data",
+            "Destination": "/opt/devsy"
+          }
+        ]
+      }
+    },
+    "pid": 2031831,
+    "processTreeIdentity": "2031831:18160948",
+    "process": {
+      "pid": 2031831,
+      "treeKind": "unix-group-v1",
+      "treeId": "2031831",
+      "identity": "2031831:18160948"
+    },
+    "launchProtocol": 1,
+    "workerReady": true,
+    "launchOwned": true,
+    "startedAt": "2026-11-19T12:15:11.581845834+01:00",
+    "updatedAt": "2026-11-19T12:15:51.141698086+01:00"
+  }
+]

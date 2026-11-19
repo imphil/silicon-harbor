@@ -1,0 +1,98 @@
+{
+  "docker": {
+    "config": {
+      "name": "docker",
+      "version": "v1.0.0",
+      "icon": "https://dl.devsy.sh/assets/docker.svg",
+      "iconRevision": "96a7d79e72132088d4cce1c3c52baee946810cc1d35cff8503223885cfe8a383",
+      "home": "https://github.com/devsy-org/devsy",
+      "source": {
+        "internal": true,
+        "raw": "docker"
+      },
+      "description": "Devsy on Docker",
+      "optionGroups": [
+        {
+          "name": "Advanced Options",
+          "options": [
+            "DOCKER_PATH",
+            "DOCKER_HOST",
+            "DOCKER_CONTEXT",
+            "DOCKER_ELEVATION",
+            "INACTIVITY_TIMEOUT",
+            "DOCKER_BUILDER"
+          ]
+        }
+      ],
+      "options": {
+        "DOCKER_BUILDER": {
+          "description": "The docker builder to use.",
+          "global": true
+        },
+        "DOCKER_CONTEXT": {
+          "description": "The Docker context to use.",
+          "global": true
+        },
+        "DOCKER_ELEVATION": {
+          "description": "Optionally run docker commands through a privilege-elevation helper for rootful daemons whose socket the current user cannot access. One of: pkexec, sudo, doas, or none. Note: pkexec targets local desktop sessions with a running polkit agent; use sudo or doas on headless/SSH hosts.",
+          "default": "none"
+        },
+        "DOCKER_HOST": {
+          "description": "The docker host to use.",
+          "global": true
+        },
+        "DOCKER_PATH": {
+          "description": "The path where to find the docker binary.",
+          "default": "docker"
+        },
+        "INACTIVITY_TIMEOUT": {
+          "description": "If defined, will automatically stop the container after the inactivity period. Examples: 10m, 1h"
+        }
+      },
+      "agent": {
+        "local": "true",
+        "containerInactivityTimeout": "${INACTIVITY_TIMEOUT}",
+        "exec": {},
+        "dockerless": {},
+        "docker": {
+          "path": "${DOCKER_PATH}",
+          "install": "true",
+          "builder": "${DOCKER_BUILDER}",
+          "env": {
+            "DOCKER_CONTEXT": "${DOCKER_CONTEXT}",
+            "DOCKER_HOST": "${DOCKER_HOST}"
+          },
+          "elevation": "${DOCKER_ELEVATION}"
+        },
+        "custom": {},
+        "kubernetes": {},
+        "apple": {},
+        "microsandbox": {}
+      },
+      "exec": {
+        "command": [
+          "\"${DEVSY}\" internal sh -c \"${COMMAND}\""
+        ]
+      }
+    },
+    "state": {
+      "initialized": true,
+      "initAttempted": true,
+      "options": {
+        "DOCKER_BUILDER": {},
+        "DOCKER_CONTEXT": {},
+        "DOCKER_ELEVATION": {
+          "value": "none"
+        },
+        "DOCKER_HOST": {},
+        "DOCKER_PATH": {
+          "value": "docker"
+        },
+        "INACTIVITY_TIMEOUT": {}
+      },
+      "creationTimestamp": "2026-11-19T11:13:36Z"
+    },
+    "status": "initialized",
+    "default": true
+  }
+}

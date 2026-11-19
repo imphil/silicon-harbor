@@ -1,0 +1,2 @@
+devsy workspace status image-fail --timeout 15s --log-level info --log-output json --result-format json
+# duration-ms: 433

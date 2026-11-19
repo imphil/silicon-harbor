@@ -1,0 +1,1 @@
+{"kind":"error","outcome":"error","code":"BUILD_FAILED_RECOVERABLE","message":"build image: get image build info: get image config remotely: retrieve image ghcr.io/devsy-org/silicon-harbor-does-not-exist:never: GET https://ghcr.io/token?scope=repository%3Adevsy-org%2Fsilicon-harbor-does-not-exist%3Apull\u0026service=ghcr.io: DENIED: requested access to the resource is denied"}
