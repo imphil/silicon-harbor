@@ -54,6 +54,8 @@ export class RequirementService {
   private list: RequirementStatus[] = []
   private readonly working = new Map<RequirementId, string>()
   private checking: Promise<RequirementStatus[]> | null = null
+  /** Automatic fixes already tried in this session (never retried by themselves). */
+  private readonly autoFixed = new Set<RequirementId>()
 
   constructor(private readonly deps: RequirementServiceDeps) {
     this.requirements = deps.requirements ?? requirementsFor(deps.host.platform)
@@ -70,8 +72,26 @@ export class RequirementService {
       this.checking = this.runChecks().finally(() => {
         this.checking = null
       })
+      void this.checking.then(() => this.runAutomaticFixes())
     }
     return this.checking
+  }
+
+  /**
+   * Runs fixes marked automatic (e.g. starting Rancher Desktop), once per
+   * session each: if one fails or is undone by the user, the item stays as
+   * the check shows it and the user decides.
+   */
+  private runAutomaticFixes(): void {
+    for (const status of this.list) {
+      if (!status.fix?.automatic) continue
+      if (this.autoFixed.has(status.id) || this.working.has(status.id)) continue
+      this.autoFixed.add(status.id)
+      this.deps.log?.(`fix ${status.id}: automatic`)
+      this.fix(status.id).catch(() => {
+        // logged by fix(); the re-check shows the state
+      })
+    }
   }
 
   async fix(id: RequirementId): Promise<void> {

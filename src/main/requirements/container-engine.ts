@@ -183,7 +183,7 @@ export const rancherDesktop: Requirement = {
           state: "warn",
           version: state.version,
           detail: "Installed, but not running.",
-          fix: { label: "Start" },
+          fix: { label: "Start", automatic: true },
         }
       case "wrong-engine":
         return {

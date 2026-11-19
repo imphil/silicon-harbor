@@ -142,6 +142,11 @@ export interface RequirementStatus {
     label: string
     needsRelogin?: boolean
     needsReboot?: boolean
+    /**
+     * Safe to run without asking (no admin rights, no downloads), e.g.
+     * starting an installed Rancher Desktop. Runs once per app session.
+     */
+    automatic?: boolean
   }
 }
 

@@ -77,6 +77,14 @@ function fixable(
   return req
 }
 
+async function until(cond: () => boolean): Promise<void> {
+  for (let i = 0; i < 200; i++) {
+    if (cond()) return
+    await new Promise((r) => setTimeout(r, 0))
+  }
+  throw new Error("timed out")
+}
+
 describe("RequirementService", () => {
   it("runs every check and reports a failing check as a warning", async () => {
     const broken: Requirement = {
@@ -224,6 +232,56 @@ describe("RequirementService", () => {
       "fix xquartz: started",
       "fix xquartz: failed: download failed",
     ])
+  })
+
+  it("runs automatic fixes by itself, once per session", async () => {
+    let running = false
+    let fixes = 0
+    const engine: Requirement = {
+      id: "container-engine",
+      async check() {
+        return running
+          ? {
+              id: "container-engine",
+              title: "Rancher Desktop",
+              state: "ok",
+              detail: "ok",
+            }
+          : {
+              id: "container-engine",
+              title: "Rancher Desktop",
+              state: "warn",
+              detail: "stopped",
+              fix: { label: "Start", automatic: true },
+            }
+      },
+      async fix() {
+        fixes++
+        running = true
+        return undefined
+      },
+    }
+    const { service, events, log } = setup([engine])
+    await service.check()
+    await until(() => events.at(-1)?.[0].state === "ok")
+    expect(fixes).toBe(1)
+    expect(log[0]).toBe("fix container-engine: automatic")
+
+    // Stopped again (e.g. the user quit it): left to the user this session.
+    running = false
+    await service.check()
+    await service.check()
+    await new Promise((r) => setTimeout(r, 0))
+    expect(fixes).toBe(1)
+    expect(service.current()[0].state).toBe("warn")
+  })
+
+  it("never runs other fixes by itself", async () => {
+    const req = fixable()
+    const { service } = setup([req])
+    await service.check()
+    await new Promise((r) => setTimeout(r, 0))
+    expect(req.fixed).toBe(false)
   })
 
   it("logs a fix's progress and outcome", async () => {
