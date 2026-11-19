@@ -67,6 +67,12 @@ describe("CliRunner", () => {
     ).not.toContain("--result-format")
   })
 
+  it("leaves the arguments alone without protocol flags (devsy --version)", () => {
+    expect(
+      runner.protocolArgs(["--version"], { protocolFlags: false }),
+    ).toEqual(["--version"])
+  })
+
   it("does not duplicate flags given explicitly", () => {
     const args = runner.protocolArgs(["x", "--log-level", "debug"])
     expect(args.filter((a) => a === "--log-level")).toHaveLength(1)

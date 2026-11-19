@@ -137,7 +137,7 @@ export class DevsyClient {
   }
 
   async version(): Promise<string> {
-    const result = await this.cli.exec(["--version"], { resultFormat: false })
+    const result = await this.cli.exec(["--version"], { protocolFlags: false })
     return result.stdout.trim().split(/\r?\n/).at(-1) ?? ""
   }
 

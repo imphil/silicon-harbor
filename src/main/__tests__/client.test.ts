@@ -50,6 +50,18 @@ describe("parseLine", () => {
 })
 
 describe("DevsyClient", () => {
+  it("asks for the version without protocol flags", async () => {
+    let options: unknown
+    const cli = {
+      exec: async (_args: string[], o?: unknown) => {
+        options = o
+        return { code: 0, stdout: "v1.27.1-phw.4\n", stderr: "" }
+      },
+    } as unknown as ConstructorParameters<typeof DevsyClient>[0]
+    expect(await new DevsyClient(cli).version()).toBe("v1.27.1-phw.4")
+    expect(options).toEqual({ protocolFlags: false })
+  })
+
   it("asks for a volume clone with --clone-into-volume", async () => {
     const cli = new FixtureCli(by({ "workspace up": "a-up-submit" }))
     await new DevsyClient(cli).submitUp({ source: "x", cloneIntoVolume: true })

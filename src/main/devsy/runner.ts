@@ -21,6 +21,11 @@ export interface CliResult {
 export interface ExecOptions {
   /** Append `--result-format json` (default true). `task logs` does not take it. */
   resultFormat?: boolean
+  /**
+   * Append the protocol flags at all (default true). `devsy --version` only
+   * works bare: with `--log-level info` it fails with `unknown command "info"`.
+   */
+  protocolFlags?: boolean
   /** Kill the process after this many milliseconds. */
   timeoutMs?: number
 }
@@ -79,6 +84,7 @@ export class CliRunner implements DevsyCli {
 
   /** The full argument list including the protocol flags. */
   protocolArgs(args: string[], options: ExecOptions = {}): string[] {
+    if (options.protocolFlags === false) return [...args]
     const has = (flag: string) =>
       args.some((arg) => arg === flag || arg.startsWith(`${flag}=`))
     const full = [...args]
