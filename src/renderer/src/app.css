@@ -43,3 +43,19 @@ body {
   flex-direction: column;
   gap: 1rem;
 }
+
+/* Carbon shows header navigation only from 66rem (1056px) and moves it into a
+   side nav below. Silicon Harbor has two destinations and a 960px minimum
+   window width, so the navigation stays in the header at every size. */
+.bx--header .bx--header__nav {
+  display: block;
+}
+
+/* Vertical progress: Carbon caps labels at 10rem, which wraps
+   "Downloading and starting the environment" into the next step. */
+.bx--progress--vertical .bx--progress-label {
+  max-width: 40rem;
+}
+.bx--progress--vertical .bx--progress-step {
+  min-height: 3.5rem;
+}

@@ -13,6 +13,7 @@
   "main": "dist/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
+    "dev:mock": "electron-vite dev --mode mock",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "fetch-devsy": "node scripts/fetch-devsy.mjs",

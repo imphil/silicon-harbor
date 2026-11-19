@@ -62,9 +62,22 @@ The hello-world UI in `src/renderer` uses runes in every page and component
 - **Carbon generation:** class names are `bx--` (Carbon v10 naming) while CSS
   custom properties are v11 tokens (`--cds-text-primary`, `--cds-text-secondary`,
   `--cds-layer-hover`, `--cds-focus`). Use v11 token names in our own CSS.
-- **Header is light in the White theme.** The mockups show a dark (g100) shell.
-  `theme="classic"` had no visible effect. Options: accept the light header,
-  or load `g100.css` scoped to the header (not tried). Decide in M3.
+- **Dark header (resolved in M3):** `theme="classic"` on `Header` only works
+  with `css/all.css`. `white.css` lacks the `.bx--header--ui-shell-classic`
+  token block that `all.css` maps to g100. The renderer now imports `all.css`
+  (default `:root` is still White) and sets `<Header theme="classic">`.
+- **Header navigation is hidden below 66rem (1056px)** — Carbon expects a side
+  nav on small screens. With two destinations and a 960px minimum window,
+  `app.css` forces `.bx--header .bx--header__nav { display: block }`.
+  `HeaderNavItem`s are exposed as `menuitem`s inside a `menubar`.
+- **Vertical ProgressIndicator** caps labels at 10rem; long step labels wrap
+  into the next step. `app.css` widens them. `ProgressIndicator` marks the
+  step at `currentIndex` as current regardless of `complete`, so point it past
+  the end when nothing is running.
+- **Modal accessible name** is `modalLabel` (the small label above the
+  heading), not `modalHeading`. Pass `aria-label` for a meaningful name.
+- **DataTable + ToolbarSearch:** with `shouldFilterRows` unset, the search only
+  binds its value; we filter rows ourselves (name, repository, branch).
 - **Bundle size:** renderer JS ~970 kB, CSS ~745 kB (full Carbon). Irrelevant
   for a local Electron app; `carbon-preprocess-svelte` (`optimizeImports`,
   `optimizeCss`) can shrink it later if wanted.
@@ -80,5 +93,5 @@ The hello-world UI in `src/renderer` uses runes in every page and component
 ## Verdict
 
 **Go.** carbon-components-svelte works from Svelte 5 runes code without
-warnings or workarounds beyond the font fix. The only open design point is the
-header theme.
+warnings. Workarounds needed so far: the font fix, `all.css` for the dark
+header, and the two small CSS overrides above (header nav, vertical progress).

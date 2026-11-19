@@ -1,8 +1,8 @@
 <script lang="ts">
-import type { AppInfo } from "$shared/api"
+import type { AppInfo, IdeId } from "$shared/api"
 import {
   Button,
-  InlineNotification,
+  Checkbox,
   RadioTile,
   StructuredList,
   StructuredListBody,
@@ -10,8 +10,12 @@ import {
   StructuredListRow,
   TileGroup,
 } from "carbon-components-svelte"
-import { api } from "../lib/api"
+import RequirementsList from "../lib/components/RequirementsList.svelte"
+import SettingsNav from "../lib/components/SettingsNav.svelte"
+import { api, usingMock } from "../lib/api"
 import { isSettingsSection, settingsSections } from "../lib/settings-sections"
+import { attempt, notifications, settings } from "../lib/stores"
+import { ideLabels, ideOrder } from "../lib/view"
 
 let { params = {} }: { params?: { section?: string } } = $props()
 
@@ -24,100 +28,158 @@ const title = $derived(
   settingsSections.find((s) => s.id === section)?.label ?? "",
 )
 
-let ide = $state("vscode")
 let info = $state<AppInfo | null>(null)
-let infoError = $state("")
 
 $effect(() => {
   api()
     .getAppInfo()
     .then((value) => (info = value))
-    .catch((error: unknown) => (infoError = String(error)))
+    .catch(() => (info = null))
 })
 
-// Spike data until the requirement checks (M2) exist.
-const requirements = [
-  {
-    name: "Rancher Desktop",
-    detail: "Running with dockerd (moby).",
-    version: "1.20.0",
-    ok: true,
-  },
-  {
-    name: "XQuartz",
-    detail: "Not installed. Graphical tools will not open.",
-    version: "—",
-    ok: false,
-  },
-  {
-    name: "docker-credential-icr",
-    detail: "Set for icr.io.",
-    version: "0.4.0",
-    ok: true,
-  },
-  {
-    name: "Git Credential Manager",
-    detail: "Signed in to github.ibm.com.",
-    version: "2.6.1",
-    ok: true,
-  },
-]
+const platformName = $derived.by(() => {
+  switch (info?.platform) {
+    case "darwin":
+      return "macOS"
+    case "win32":
+      return "Windows"
+    case "linux":
+      return "Fedora"
+    default:
+      return info?.platform ?? ""
+  }
+})
+
+async function copyDiagnostics(): Promise<void> {
+  const ok = await attempt("Could not create the diagnostics", async () => {
+    await api().copyDiagnostics()
+    return true
+  })
+  if (ok) {
+    notifications.push({
+      kind: "success",
+      title: "Diagnostics copied",
+      subtitle: "Paste them into your support request.",
+    })
+  }
+}
 </script>
 
 <div class="sh-page">
   <div class="sh-page-header">
-    <h1>{title}</h1>
+    <h1>Settings</h1>
   </div>
 
-  {#if section === "computer"}
-    <div class="sh-stack">
-      <InlineNotification
-        kind="warning"
-        lowContrast
-        hideCloseButton
-        title="XQuartz is not installed."
-        subtitle="Graphical tools in your environments will not open."
-      />
-      <StructuredList condensed>
-        <StructuredListBody>
-          {#each requirements as r (r.name)}
+  <div class="sh-settings">
+    <div class="sh-settings-nav">
+      <SettingsNav {section} />
+    </div>
+
+    <section class="sh-settings-body" aria-labelledby="sh-section-title">
+      <h2 id="sh-section-title">{title}</h2>
+
+      {#if section === "computer"}
+        <p class="sh-muted">
+          The tools Silicon Harbor needs{platformName ? ` on ${platformName}` : ""}.
+          Checked every time the app starts.
+        </p>
+        <RequirementsList showFixAll />
+      {:else if section === "ide"}
+        <p class="sh-muted">
+          New environments open with this IDE. You can change it per environment.
+        </p>
+        <TileGroup
+          legendText="Default IDE"
+          name="sh-default-ide"
+          selected={settings.value.defaultIde}
+          on:select={(e) => settings.update({ defaultIde: e.detail as IdeId })}
+        >
+          {#each ideOrder as id (id)}
+            <RadioTile value={id}>{ideLabels[id]}</RadioTile>
+          {/each}
+        </TileGroup>
+      {:else if section === "updates"}
+        <StructuredList condensed>
+          <StructuredListBody>
             <StructuredListRow>
-              <StructuredListCell noWrap><strong>{r.name}</strong></StructuredListCell>
-              <StructuredListCell>{r.detail}</StructuredListCell>
-              <StructuredListCell><span class="sh-mono">{r.version}</span></StructuredListCell>
+              <StructuredListCell noWrap>Silicon Harbor</StructuredListCell>
               <StructuredListCell>
-                {#if !r.ok}<Button kind="tertiary" size="small">Install</Button>{/if}
+                {info ? `Silicon Harbor ${info.appVersion}` : "…"}
               </StructuredListCell>
             </StructuredListRow>
-          {/each}
-        </StructuredListBody>
-      </StructuredList>
-      <div><Button kind="secondary">Check again</Button></div>
-    </div>
-  {:else if section === "ide"}
-    <TileGroup legendText="New environments open with this IDE" name="ide" bind:selected={ide}>
-      <RadioTile value="vscode">VS Code</RadioTile>
-      <RadioTile value="bob">IBM Bob</RadioTile>
-      <RadioTile value="codium">VSCodium</RadioTile>
-    </TileGroup>
-    <p class="sh-muted" style="margin-top: 1rem">Selected: {ide}</p>
-  {:else if section === "updates"}
-    <div class="sh-stack">
-      {#if info}
-        <p>Silicon Harbor {info.appVersion} · Electron {info.electronVersion} · {info.platform}/{info.arch}</p>
-        <p>
-          Devsy engine:
-          {#if info.devsyPath}<span class="sh-mono">{info.devsyPath}</span>{:else}not bundled{/if}
+            <StructuredListRow>
+              <StructuredListCell noWrap>Electron</StructuredListCell>
+              <StructuredListCell>{info?.electronVersion ?? "…"}</StructuredListCell>
+            </StructuredListRow>
+            <StructuredListRow>
+              <StructuredListCell noWrap>Devsy engine</StructuredListCell>
+              <StructuredListCell>
+                {info?.devsyPath ? "Bundled, pinned to this release" : "Not found"}
+              </StructuredListCell>
+            </StructuredListRow>
+            <StructuredListRow>
+              <StructuredListCell noWrap>Platform</StructuredListCell>
+              <StructuredListCell>
+                {info ? `${platformName} · ${info.arch}` : "…"}
+              </StructuredListCell>
+            </StructuredListRow>
+          </StructuredListBody>
+        </StructuredList>
+        <Checkbox
+          labelText="Check for updates automatically"
+          checked={settings.value.autoUpdateCheck}
+          on:change={(e) =>
+            settings.update({
+              autoUpdateCheck: (e.currentTarget as HTMLInputElement).checked,
+            })}
+        />
+        <div>
+          <Button kind="tertiary" disabled>Check for updates (coming soon)</Button>
+        </div>
+      {:else if section === "support"}
+        <p class="sh-muted">
+          A diagnostics text contains the app and engine logs and the results of the
+          computer check. It contains no source code or passwords.
         </p>
-      {:else if infoError}
-        <p class="sh-muted">{infoError}</p>
+        <div>
+          <Button kind="tertiary" on:click={copyDiagnostics}>Copy diagnostics</Button>
+        </div>
       {/if}
-      <div><Button kind="tertiary">Check for updates</Button></div>
-    </div>
-  {:else}
-    <div class="sh-stack">
-      <p class="sh-muted">A diagnostics bundle contains logs and the results of the computer check. It contains no source code or passwords.</p>
-      <div><Button kind="tertiary">Create diagnostics bundle</Button></div>
-    </div>
-  {/if}
+
+      {#if usingMock()}
+        <p class="sh-muted sh-small">Demo data: running against the mock API.</p>
+      {/if}
+    </section>
+  </div>
 </div>
+
+<style>
+  .sh-settings {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem;
+    align-items: flex-start;
+  }
+  .sh-settings-nav {
+    flex: 1 1 12rem;
+    max-width: 15rem;
+  }
+  .sh-settings-body {
+    flex: 999 1 30rem;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .sh-settings-body h2 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 400;
+  }
+  .sh-settings-body p {
+    margin: 0;
+  }
+  .sh-small {
+    font-size: 0.75rem;
+  }
+</style>

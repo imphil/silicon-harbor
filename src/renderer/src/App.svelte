@@ -5,14 +5,18 @@ import {
   HeaderNav,
   HeaderNavItem,
   HeaderUtilities,
+  Loading,
   SkipToContent,
 } from "carbon-components-svelte"
 import CheckmarkFilled from "carbon-icons-svelte/lib/CheckmarkFilled.svelte"
+import Help from "carbon-icons-svelte/lib/Help.svelte"
 import WarningAltFilled from "carbon-icons-svelte/lib/WarningAltFilled.svelte"
 import Router, { router } from "svelte-spa-router"
-import SettingsNav from "./lib/components/SettingsNav.svelte"
+import Toasts from "./lib/components/Toasts.svelte"
+import { environments, requirements, settings } from "./lib/stores"
 import EnvironmentDetail from "./pages/EnvironmentDetail.svelte"
 import Environments from "./pages/Environments.svelte"
+import FirstRun from "./pages/FirstRun.svelte"
 import NotFound from "./pages/NotFound.svelte"
 import Settings from "./pages/Settings.svelte"
 
@@ -23,57 +27,97 @@ const routes = {
   "*": NotFound,
 }
 
-// Spike: a fake health state so both header variants can be inspected.
-let healthy = $state(false)
-let isSideNavOpen = $state(true)
+$effect(() => {
+  void settings.init()
+  void environments.init()
+  void requirements.init()
+  return () => {
+    environments.dispose()
+    requirements.dispose()
+  }
+})
+
+const firstRun = $derived(settings.loaded && !settings.value.firstRunDone)
 
 // svelte-spa-router 5 exposes a rune-based `router` object, not a store.
 const inSettings = $derived(router.location.startsWith("/settings"))
-const settingsSection = $derived(router.location.split("/")[2] || "computer")
+
+const issueCount = $derived(requirements.issues.length)
+// "unknown" when the check itself failed: never claim "Ready" without a result.
+const health = $derived(
+  requirements.loadError ? "unknown" : issueCount === 0 ? "ready" : "issues",
+)
+const healthLabel = $derived(
+  health === "unknown"
+    ? "Not checked"
+    : health === "ready"
+      ? "Ready"
+      : issueCount === 1
+        ? "1 issue"
+        : `${issueCount} issues`,
+)
+const healthTitle = $derived(
+  health === "unknown"
+    ? "This computer could not be checked. Open Settings for details."
+    : health === "ready"
+      ? "This computer is ready"
+      : `${healthLabel} on this computer. Open Settings to fix.`,
+)
 </script>
 
 <Header
+  theme="classic"
+  uiShellAriaLabel="Silicon Harbor"
   companyName="IBM"
   platformName="Silicon Harbor"
   href="#/"
-  bind:isSideNavOpen
-  persistentHamburgerMenu={false}
 >
   <svelte:fragment slot="skipToContent">
     <SkipToContent />
   </svelte:fragment>
-  <HeaderNav>
-    <HeaderNavItem
-      href="#/"
-      text="Environments"
-      isSelected={!inSettings}
-    />
-    <HeaderNavItem href="#/settings" text="Settings" isSelected={inSettings} />
-  </HeaderNav>
-  <HeaderUtilities>
-    <a
-      class="sh-health"
-      href="#/settings/computer"
-      title={healthy ? "This computer is ready" : "1 issue on this computer"}
-    >
-      {#if healthy}
-        <CheckmarkFilled fill="#42be65" />
-        <span>Ready</span>
-      {:else}
-        <WarningAltFilled fill="#f1c21b" />
-        <span>1 issue</span>
+  {#if settings.loaded && !firstRun}
+    <HeaderNav aria-label="Main">
+      <HeaderNavItem href="#/" text="Environments" isSelected={!inSettings} />
+      <HeaderNavItem href="#/settings" text="Settings" isSelected={inSettings} />
+    </HeaderNav>
+    <HeaderUtilities>
+      {#if requirements.loaded}
+        <a
+          class="sh-health"
+          class:sh-health-issue={health === "issues"}
+          href="#/settings/computer"
+          title={healthTitle}
+          data-testid="health"
+        >
+          {#if health === "ready"}
+            <CheckmarkFilled fill="#42be65" />
+          {:else if health === "unknown"}
+            <Help fill="#c6c6c6" />
+          {:else}
+            <WarningAltFilled fill="#f1c21b" class="sh-warn-icon" />
+          {/if}
+          <span>{healthLabel}</span>
+        </a>
       {/if}
-    </a>
-  </HeaderUtilities>
+    </HeaderUtilities>
+  {:else if firstRun}
+    <HeaderUtilities>
+      <span class="sh-health">Setup</span>
+    </HeaderUtilities>
+  {/if}
 </Header>
 
-{#if inSettings}
-  <SettingsNav section={settingsSection} bind:isOpen={isSideNavOpen} />
-{/if}
-
 <Content>
-  <Router {routes} />
+  {#if !settings.loaded}
+    <Loading withOverlay={false} description="Loading" />
+  {:else if firstRun}
+    <FirstRun />
+  {:else}
+    <Router {routes} />
+  {/if}
 </Content>
+
+<Toasts />
 
 <style>
   .sh-health {
@@ -82,16 +126,23 @@ const settingsSection = $derived(router.location.split("/")[2] || "computer")
     gap: 0.5rem;
     height: 3rem;
     padding: 0 1rem;
-    color: var(--cds-text-secondary, #525252);
+    color: #c6c6c6;
     font-size: 0.75rem;
     text-decoration: none;
   }
-  .sh-health:hover {
-    background: var(--cds-layer-hover, #e5e5e5);
-    color: var(--cds-text-primary, #161616);
+  a.sh-health:hover {
+    background: #353535;
+    color: #f4f4f4;
   }
-  .sh-health:focus {
-    outline: 2px solid var(--cds-focus, #0f62fe);
+  a.sh-health:focus {
+    outline: 2px solid #ffffff;
     outline-offset: -2px;
+  }
+  .sh-health-issue {
+    color: #f4f4f4;
+  }
+  :global(.sh-warn-icon path[data-icon-path="inner-path"]) {
+    fill: #161616;
+    opacity: 1;
   }
 </style>
