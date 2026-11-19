@@ -98,6 +98,7 @@ function startBackend(): void {
     manifest: loadManifest(),
     binDir,
     settings: () => settings.get(),
+    updateSettings: (patch) => settings.update(patch),
     pendingFile: join(app.getPath("userData"), "requirements-pending.json"),
     bootTime: () => Date.now() - uptime() * 1000,
     onChange: (list) => broadcast(IpcChannel.evtRequirements, list),

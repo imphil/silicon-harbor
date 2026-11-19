@@ -16,7 +16,7 @@ export const ideLabels: Record<IdeId, string> = {
   codium: "VSCodium",
 }
 
-export const ideOrder: IdeId[] = ["vscode", "bob", "codium"]
+export const ideOrder: IdeId[] = ["bob", "vscode", "codium"]
 
 export function ideLabel(ide: IdeId | undefined): string {
   return ide ? ideLabels[ide] : "your IDE"

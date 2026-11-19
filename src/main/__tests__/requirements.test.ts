@@ -13,7 +13,7 @@ import {
   gitCredentialsMac,
   gitCredentialsWindows,
 } from "../requirements/git-credentials"
-import { ide, VSCODE_DOWNLOAD_URL } from "../requirements/ide"
+import { BOB_DOWNLOAD_URL, ide } from "../requirements/ide"
 import { requirementsFor } from "../requirements/registry"
 import { userBinDir } from "../requirements/user-bin"
 import { parseWslVersion, wsl } from "../requirements/wsl"
@@ -734,26 +734,57 @@ describe("IDE", () => {
     })
   })
 
-  it("warns when the default IDE is missing but another one exists", async () => {
+  it("makes the only installed IDE the default, without a warning", async () => {
+    const host = new FakeHost({
+      platform: "linux",
+      path: { code: "/usr/bin/code" },
+      commands: { "/usr/bin/code --version": ok("1.106.0\n") },
+    })
+    const ctx = fakeContext(host, { settings: { defaultIde: "bob" } })
+    expect(await ide.check(ctx)).toMatchObject({
+      state: "ok",
+      version: "1.106.0",
+      detail: "Visual Studio Code",
+    })
+    expect(ctx.settings().defaultIde).toBe("vscode")
+  })
+
+  it("leaves the default alone when it is the only IDE", async () => {
     const host = new FakeHost({
       platform: "linux",
       path: { bobide: "/opt/bob/bobide" },
     })
-    expect(await ide.check(fakeContext(host))).toMatchObject({
-      state: "warn",
-      detail:
-        "Visual Studio Code was not found. Found: IBM Bob. Change the default IDE in Settings › IDE.",
+    const ctx = fakeContext(host)
+    expect(await ide.check(ctx)).toMatchObject({
+      state: "ok",
+      detail: "IBM Bob",
     })
+    expect(ctx.settings().defaultIde).toBe("bob")
   })
 
-  it("opens the download page when no IDE is installed", async () => {
+  it("warns when the default IDE is missing but several others exist", async () => {
+    const host = new FakeHost({
+      platform: "linux",
+      path: { code: "/usr/bin/code", codium: "/usr/bin/codium" },
+    })
+    const ctx = fakeContext(host)
+    expect(await ide.check(ctx)).toMatchObject({
+      state: "warn",
+      detail:
+        "IBM Bob was not found. Found: Visual Studio Code, VSCodium. Change the default IDE in Settings › IDE.",
+    })
+    expect(ctx.settings().defaultIde).toBe("bob")
+  })
+
+  it("opens the IBM Bob download page when no IDE is installed", async () => {
     const host = new FakeHost({ platform: "win32" })
     const ctx = fakeContext(host)
     expect(await ide.check(ctx)).toMatchObject({
       state: "missing",
-      fix: { label: "Get VS Code" },
+      fix: { label: "Get IBM Bob" },
     })
     await ide.fix?.(ctx)
-    expect(host.opened).toEqual([VSCODE_DOWNLOAD_URL])
+    expect(host.opened).toEqual([BOB_DOWNLOAD_URL])
+    expect(BOB_DOWNLOAD_URL).toBe("https://bob.ibm.com/download?bob=ide")
   })
 })

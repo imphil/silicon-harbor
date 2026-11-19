@@ -42,7 +42,8 @@ export const IDES: IdeSpec[] = [
   },
 ]
 
-export const VSCODE_DOWNLOAD_URL = "https://code.visualstudio.com/download"
+/** IBM Bob is the recommended IDE; its official download page. */
+export const BOB_DOWNLOAD_URL = "https://bob.ibm.com/download?bob=ide"
 
 export interface FoundIde {
   id: IdeId
@@ -84,11 +85,17 @@ export const ide: Requirement = {
       return {
         ...base,
         state: "missing",
-        detail: "No supported IDE found. Install IBM Bob, VS Code or VSCodium.",
-        fix: { label: "Get VS Code" },
+        detail:
+          "No supported IDE found. Install IBM Bob (recommended), VS Code or VSCodium.",
+        fix: { label: "Get IBM Bob" },
       }
     }
-    const preferred = ctx.settings().defaultIde
+    let preferred = ctx.settings().defaultIde
+    // With a single IDE there is nothing to choose: it becomes the default.
+    if (found.length === 1 && found[0].id !== preferred) {
+      preferred = found[0].id
+      ctx.updateSettings({ defaultIde: preferred })
+    }
     const main = found.find((f) => f.id === preferred)
     if (!main) {
       const label = IDES.find((s) => s.id === preferred)?.label ?? preferred
@@ -108,7 +115,7 @@ export const ide: Requirement = {
   },
 
   async fix(ctx) {
-    await ctx.host.openExternal(VSCODE_DOWNLOAD_URL)
+    await ctx.host.openExternal(BOB_DOWNLOAD_URL)
     return undefined
   },
 }

@@ -31,6 +31,7 @@ export interface RequirementServiceDeps {
   manifest: Manifest
   binDir: string
   settings(): Settings
+  updateSettings?(patch: Partial<Settings>): void
   /** JSON file remembering fixes that wait for a re-login or reboot. */
   pendingFile: string
   /** Approximate boot time in ms (Date.now() - os.uptime() * 1000). */
@@ -154,6 +155,7 @@ export class RequirementService {
       manifest: deps.manifest,
       binDir: deps.binDir,
       settings: deps.settings,
+      updateSettings: (patch) => deps.updateSettings?.(patch),
       pending: pendingMap[id],
       resolvePending: () => resolved?.add(id),
       progress: (detail) => {

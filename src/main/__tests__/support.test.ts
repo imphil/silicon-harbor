@@ -148,7 +148,7 @@ describe("SettingsStore", () => {
       JSON.stringify({ defaultIde: "emacs", firstRunDone: true }),
     )
     expect(new SettingsStore(file).get()).toMatchObject({
-      defaultIde: "vscode",
+      defaultIde: "bob",
       firstRunDone: true,
     })
     expect(readFileSync(file, "utf8")).toContain("emacs")

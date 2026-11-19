@@ -286,7 +286,7 @@ export function createMockApi(options: MockOptions = {}): SiliconHarborApi {
   const failOnce = new Map<string, "registry" | "clone">()
 
   let settings: Settings = {
-    defaultIde: "vscode",
+    defaultIde: "bob",
     autoUpdateCheck: true,
     firstRunDone: scenario !== "first-run",
   }

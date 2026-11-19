@@ -2,7 +2,7 @@ import type { Settings, SiliconHarborApi } from "$shared/api"
 import { attempt } from "./notifications.svelte"
 
 const DEFAULTS: Settings = {
-  defaultIde: "vscode",
+  defaultIde: "bob",
   autoUpdateCheck: true,
   firstRunDone: true,
 }
@@ -14,6 +14,9 @@ export class SettingsStore {
   constructor(private readonly api: () => SiliconHarborApi) {}
 
   async init(): Promise<void> {
+    // The IDE check may change the default IDE (the only one installed);
+    // re-read the settings after every check.
+    this.api().onRequirementsChanged(() => void this.refresh())
     try {
       this.value = await this.api().getSettings()
     } catch {
@@ -22,6 +25,14 @@ export class SettingsStore {
       this.value = { ...DEFAULTS }
     } finally {
       this.loaded = true
+    }
+  }
+
+  private async refresh(): Promise<void> {
+    try {
+      this.value = await this.api().getSettings()
+    } catch {
+      // keep what we have
     }
   }
 

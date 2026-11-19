@@ -173,6 +173,12 @@ export function fakeContext(
 ): FakeContext {
   const installs: FakeContext["installs"] = []
   const progressLog: string[] = []
+  const settings: Settings = {
+    defaultIde: "bob",
+    autoUpdateCheck: true,
+    firstRunDone: true,
+    ...options.settings,
+  }
   return {
     host,
     manifest: options.manifest ?? loadManifest(),
@@ -181,12 +187,10 @@ export function fakeContext(
       (host.platform === "win32"
         ? "C:\\Users\\dev\\.silicon-harbor\\bin"
         : `${host.homeDir}/.silicon-harbor/bin`),
-    settings: () => ({
-      defaultIde: "vscode",
-      autoUpdateCheck: true,
-      firstRunDone: true,
-      ...options.settings,
-    }),
+    settings: () => ({ ...settings }),
+    updateSettings: (patch) => {
+      Object.assign(settings, patch)
+    },
     pending: options.pending,
     progress: (detail) => progressLog.push(detail),
     resolved: false,

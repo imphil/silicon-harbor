@@ -17,6 +17,8 @@ export type Pending = "relogin" | "reboot"
 export interface RequirementContext {
   host: Host
   settings(): Settings
+  /** Changes settings (e.g. the IDE check picks the only installed IDE). */
+  updateSettings(patch: Partial<Settings>): void
   /** Our own bin directory (docker-credential-icr), on the Devsy CLI's PATH. */
   binDir: string
   /** Pinned vendor installers. */

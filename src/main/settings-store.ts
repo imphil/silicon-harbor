@@ -6,7 +6,7 @@ import type { Settings } from "../shared/api"
 export const IdeIdSchema = z.enum(["vscode", "bob", "codium"])
 
 const SettingsSchema = z.object({
-  defaultIde: IdeIdSchema.catch("vscode"),
+  defaultIde: IdeIdSchema.catch("bob"),
   autoUpdateCheck: z.boolean().catch(true),
   firstRunDone: z.boolean().catch(false),
 })
@@ -21,7 +21,7 @@ export const SettingsPatchSchema = z
   .strict()
 
 export const DEFAULT_SETTINGS: Settings = {
-  defaultIde: "vscode",
+  defaultIde: "bob",
   autoUpdateCheck: true,
   firstRunDone: false,
 }
