@@ -192,6 +192,8 @@ export interface GitHubCredential {
   scopes?: string[]
   /** While a browser sign-in waits: the one-time code and the page to enter it on. */
   signIn?: { code?: string; url?: string }
+  /** ISO 8601: when the state was last checked. */
+  checkedAt?: string
 }
 
 /** The Artifactory identity token, mounted into environments. */
@@ -209,11 +211,38 @@ export interface ArtifactoryCredential {
   detail: string
   /** The w3id (IBM email address) the token belongs to. */
   user?: string
+  /** ISO 8601: when the state was last checked. */
+  checkedAt?: string
+}
+
+/**
+ * The IBM Cloud login of docker-credential-icr (images from icr.io). The
+ * helper keeps and refreshes the token itself; without a valid one, asking it
+ * opens the IBM Cloud login in the browser.
+ */
+export interface IbmCloudCredential {
+  /** The registry the helper is asked for, "icr.io". */
+  registry: string
+  state:
+    | "ok"
+    /** docker-credential-icr is not installed (see "This computer"). */
+    | "no-helper"
+    | "signed-out"
+    /** Could not be checked (offline, helper failed). */
+    | "unknown"
+  detail: string
+  /** From the token: the account's email address and name. */
+  account?: { email?: string; name?: string }
+  /** True while the helper waits for the login in the browser. */
+  signingIn?: boolean
+  /** ISO 8601: when the state was last checked. */
+  checkedAt?: string
 }
 
 export interface CredentialsStatus {
   github: GitHubCredential
   artifactory: ArtifactoryCredential
+  ibmCloud: IbmCloudCredential
 }
 
 export interface SaveArtifactoryRequest {
@@ -263,13 +292,19 @@ export interface SiliconHarborApi {
   checkRequirements(): Promise<RequirementStatus[]>
   fixRequirement(id: RequirementId): Promise<void>
 
-  /** Last known status (checks once on first call). */
+  /** Last known status; checks first when never or over 10 minutes ago. */
   getCredentials(): Promise<CredentialsStatus>
-  /** Checks again: asks github.ibm.com and Artifactory whether the sign-ins work. */
+  /**
+   * Checks again: asks github.ibm.com and Artifactory whether the sign-ins
+   * work. Also asks docker-credential-icr, which may open the IBM Cloud
+   * login; that result arrives via onCredentialsChanged.
+   */
   checkCredentials(): Promise<CredentialsStatus>
   /** Starts the GitHub CLI browser sign-in; resolves when it finished or failed. */
   signInGitHub(): Promise<void>
   cancelGitHubSignIn(): Promise<void>
+  /** Stops waiting for the IBM Cloud login in the browser. */
+  cancelIbmCloudSignIn(): Promise<void>
   /** Stores the w3id and token in Devsy's secret store and checks the token. */
   saveArtifactoryToken(req: SaveArtifactoryRequest): Promise<CredentialsStatus>
   removeArtifactoryToken(): Promise<CredentialsStatus>
@@ -305,6 +340,7 @@ export const IpcChannel = {
   credCheck: "cred:check",
   credGitHubSignIn: "cred:github-sign-in",
   credGitHubCancel: "cred:github-cancel",
+  credIbmCloudCancel: "cred:ibmcloud-cancel",
   credArtifactorySave: "cred:artifactory-save",
   credArtifactoryRemove: "cred:artifactory-remove",
   settingsGet: "settings:get",

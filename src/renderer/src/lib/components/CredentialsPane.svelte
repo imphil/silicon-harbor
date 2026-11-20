@@ -2,6 +2,7 @@
 import type {
   ArtifactoryCredential,
   GitHubCredential,
+  IbmCloudCredential,
   RequirementStatus,
 } from "$shared/api"
 import {
@@ -16,23 +17,36 @@ import {
   Tag,
   TextInput,
 } from "carbon-components-svelte"
+import { untrack } from "svelte"
 import { credentials } from "../stores"
+import { checkedAgo } from "../stores/clock.svelte"
+import { relativeTime } from "../view"
 import RequirementIcon from "./RequirementIcon.svelte"
 
 /** Settings › Credentials: what environments can sign in with, and its state. */
 
+// Each time the pane opens: the main process checks again when the last
+// check is over 10 minutes old (and asks docker-credential-icr, which may
+// open the IBM Cloud login).
 $effect(() => {
-  void credentials.init()
+  untrack(() => void credentials.init())
 })
 
 const github = $derived(credentials.status?.github)
 const artifactory = $derived(credentials.status?.artifactory)
+const ibmCloud = $derived(credentials.status?.ibmCloud)
 const signIn = $derived(github?.signIn)
 
 function githubIcon(g: GitHubCredential): RequirementStatus["state"] {
   if (g.signIn) return "working"
   if (g.state === "ok") return "ok"
   return g.state === "unknown" || g.state === "invalid" ? "warn" : "missing"
+}
+
+function ibmCloudIcon(c: IbmCloudCredential): RequirementStatus["state"] {
+  if (c.signingIn) return "working"
+  if (c.state === "ok") return "ok"
+  return c.state === "unknown" ? "warn" : "missing"
 }
 
 function artifactoryIcon(a: ArtifactoryCredential): RequirementStatus["state"] {
@@ -43,6 +57,7 @@ function artifactoryIcon(a: ArtifactoryCredential): RequirementStatus["state"] {
 const stateLabel: Record<string, string> = {
   ok: "Working",
   "no-cli": "Not installed",
+  "no-helper": "Not installed",
   "signed-out": "Not signed in",
   missing: "No token",
   invalid: "Rejected",
@@ -128,7 +143,11 @@ function cancelEdit(): void {
         {/if}
         <p class="sh-muted sh-small">
           Signed in through the GitHub CLI on this computer. Environments use this sign-in
-          for Git and the GitHub CLI (gh) while your IDE or a terminal is connected.
+          for Git and the GitHub CLI (gh): in their setup steps, and while your IDE or a
+          terminal is connected.
+        </p>
+        <p class="sh-muted sh-small" data-testid="github-checked">
+          {checkedAgo(github.checkedAt, relativeTime)}
         </p>
 
         {#if signIn}
@@ -196,10 +215,12 @@ function cancelEdit(): void {
         <p class="sh-muted sh-small">
           Environments get the token at <span class="sh-mono">/run/secrets/ARTIFACTORY_TOKEN</span>
           and your w3id at <span class="sh-mono">/run/secrets/IBM_USER</span> when they start. A
-          change reaches running environments at their next start. An environment created
-          before the first token was saved is recreated once at its next start; changes
-          outside its source folder are lost then.
+          change reaches running environments at their next start. If the repository does
+          not keep <span class="sh-mono">/run/secrets</span> in a volume of its own, an
+          environment created before the first token was saved is recreated once at its next
+          start; changes outside its source folder are lost then.
         </p>
+        <p class="sh-muted sh-small">{checkedAgo(artifactory.checkedAt, relativeTime)}</p>
 
         {#if showForm}
           <div class="sh-form">
@@ -255,12 +276,61 @@ function cancelEdit(): void {
         {/if}
       </section>
     {/if}
+
+    {#if ibmCloud}
+      <section class="sh-cred" aria-labelledby="sh-cred-ibmcloud" data-testid="cred-ibmcloud">
+        <header class="sh-cred-head">
+          <RequirementIcon state={ibmCloudIcon(ibmCloud)} />
+          <h3 id="sh-cred-ibmcloud">
+            IBM Cloud <span class="sh-mono sh-muted">{ibmCloud.registry}</span>
+          </h3>
+          <Tag size="sm" type={tagType(ibmCloud.state)}>
+            {ibmCloud.state === "signed-out" ? "Not logged in" : (stateLabel[ibmCloud.state] ?? ibmCloud.state)}
+          </Tag>
+        </header>
+
+        <p>{ibmCloud.detail}</p>
+        <p class="sh-muted sh-small">
+          Docker downloads images from {ibmCloud.registry} with this login, through
+          docker-credential-icr. The helper keeps the login and renews it; when it no longer
+          can, it asks you to log in again in the browser. Silicon Harbor asks it here, so
+          that happens now and not in the middle of creating an environment.
+        </p>
+
+        {#if ibmCloud.signingIn}
+          <div class="sh-signin" data-testid="ibmcloud-sign-in">
+            <p>Log in to IBM Cloud in the browser window that opened.</p>
+            <InlineLoading description="Waiting for the IBM Cloud login…" />
+            <div class="sh-buttons">
+              <Button kind="ghost" size="small" on:click={() => credentials.cancelIbmCloudSignIn()}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        {:else if ibmCloud.state === "no-helper"}
+          <div class="sh-buttons">
+            <Button kind="tertiary" size="small" href="#/settings/computer">
+              Install on This computer
+            </Button>
+          </div>
+        {:else if ibmCloud.state !== "ok"}
+          <div class="sh-buttons">
+            <Button kind="primary" size="small" on:click={() => credentials.check()}>
+              Log in
+            </Button>
+          </div>
+        {/if}
+        <p class="sh-muted sh-small">{checkedAgo(ibmCloud.checkedAt, relativeTime)}</p>
+      </section>
+    {/if}
   {/if}
 
   <div class="sh-buttons sh-end">
     <Button
       kind="secondary"
-      disabled={credentials.checking || credentials.signingIn}
+      disabled={credentials.checking ||
+        credentials.signingIn ||
+        ibmCloud?.signingIn === true}
       on:click={() => credentials.check()}
     >
       {credentials.checking ? "Checking…" : "Check again"}

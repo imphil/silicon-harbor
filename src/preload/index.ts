@@ -44,6 +44,7 @@ const api: SiliconHarborApi = {
   checkCredentials: () => invoke(IpcChannel.credCheck),
   signInGitHub: () => invoke(IpcChannel.credGitHubSignIn),
   cancelGitHubSignIn: () => invoke(IpcChannel.credGitHubCancel),
+  cancelIbmCloudSignIn: () => invoke(IpcChannel.credIbmCloudCancel),
   saveArtifactoryToken: (req) => invoke(IpcChannel.credArtifactorySave, req),
   removeArtifactoryToken: () => invoke(IpcChannel.credArtifactoryRemove),
 

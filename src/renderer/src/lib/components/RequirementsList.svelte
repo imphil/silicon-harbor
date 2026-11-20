@@ -1,6 +1,9 @@
 <script lang="ts">
 import { Button, InlineNotification } from "carbon-components-svelte"
+import { untrack } from "svelte"
 import { requirements } from "../stores"
+import { checkedAgo, RECHECK_AFTER_MS } from "../stores/clock.svelte"
+import { relativeTime } from "../view"
 import RequirementIcon from "./RequirementIcon.svelte"
 
 let {
@@ -11,6 +14,11 @@ let {
   /** Link the IDE and GitHub rows to their Settings pages (not during first-run setup). */
   manageIdeLink?: boolean
 } = $props()
+
+// An old result is checked again when the list is shown (Settings, setup).
+$effect(() => {
+  untrack(() => void requirements.checkIfOlderThan(RECHECK_AFTER_MS))
+})
 
 const needsRelogin = $derived(
   requirements.list.some((r) => r.state === "ok" && /log out/i.test(r.detail)),
@@ -95,6 +103,11 @@ const needsRelogin = $derived(
   </p>
 
   <div class="sh-req-buttons">
+    {#if requirements.checkedAt && !requirements.checking}
+      <span class="sh-muted sh-small" data-testid="requirements-checked">
+        {checkedAgo(requirements.checkedAt, relativeTime)}
+      </span>
+    {/if}
     <Button
       kind="secondary"
       disabled={requirements.checking}
@@ -157,7 +170,11 @@ const needsRelogin = $derived(
     display: flex;
     gap: 1px;
     justify-content: flex-end;
+    align-items: center;
     flex-wrap: wrap;
+  }
+  .sh-req-buttons .sh-small {
+    margin-right: 1rem;
   }
   .sh-small {
     font-size: 0.75rem;

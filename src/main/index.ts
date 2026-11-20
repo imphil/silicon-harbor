@@ -94,6 +94,7 @@ function startBackend(): void {
     host,
     secrets: client,
     signIn: gitHubSignIn,
+    binDir,
     log: (entry) => setupLog.write(entry),
     onChange: (status) => broadcast(IpcChannel.evtCredentials, status),
   })
@@ -142,6 +143,10 @@ function startBackend(): void {
   })
   void environments.start()
   void requirements.check()
+  // Keep "This computer" (and the header's Ready / issue status) current
+  // while the app stays open. Credentials are only checked on request: the
+  // IBM Cloud check may open a login in the browser.
+  setInterval(() => void requirements.check(), REQUIREMENTS_RECHECK_MS).unref()
 }
 
 /** Runs the shared GitHub sign-in, reporting its one-time code once known. */
@@ -163,6 +168,8 @@ async function signInWithCode(
     clearInterval(timer)
   }
 }
+
+const REQUIREMENTS_RECHECK_MS = 60 * 60_000
 
 function cloneIntoVolumeFor(platform: NodeJS.Platform): boolean {
   return platform === "darwin" || platform === "win32"

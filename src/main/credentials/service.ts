@@ -2,6 +2,7 @@ import type {
   ArtifactoryCredential,
   CredentialsStatus,
   GitHubCredential,
+  IbmCloudCredential,
   SaveArtifactoryRequest,
 } from "../../shared/api"
 import type { SecretEntry } from "../devsy/schemas"
@@ -22,6 +23,10 @@ import {
   type GitHubSignIn,
   ghSignedIn,
 } from "./github"
+import { findIcrHelper, ICR_REGISTRY, type IcrGet, icrGet } from "./ibmcloud"
+
+/** Results older than this are checked again when the pane asks for them. */
+export const STALE_AFTER_MS = 10 * 60_000
 
 /** What we need from Devsy's secret store (DevsyClient). */
 export interface SecretStore {
@@ -35,15 +40,19 @@ export interface CredentialServiceDeps {
   host: Host
   secrets: SecretStore
   signIn: GitHubSignIn
+  /** Our bin dir (docker-credential-icr may be there, see credential-helper.ts). */
+  binDir: string
   onChange(status: CredentialsStatus): void
   fetch?: typeof fetch
   log?(entry: string): void
+  now?(): number
 }
 
 /**
- * Settings › Credentials: the GitHub CLI sign-in and the Artifactory token,
- * their status, and the `--secret` flags that bring the token into
- * environments. Values never leave the main process except into Devsy.
+ * Settings › Credentials: the GitHub CLI sign-in, the Artifactory token and
+ * the IBM Cloud login of docker-credential-icr, their status, and the
+ * `--secret` flags that bring the token into environments. Values never
+ * leave the main process except into Devsy.
  */
 export class CredentialService {
   private github: GitHubCredential = {
@@ -56,35 +65,60 @@ export class CredentialService {
     state: "unknown",
     detail: "Not checked yet.",
   }
+  private ibmCloud: IbmCloudCredential = {
+    registry: ICR_REGISTRY,
+    state: "unknown",
+    detail: "Not checked yet.",
+  }
   private checking: Promise<CredentialsStatus> | null = null
-  private checked = false
+  /** When the last full check finished (ms), 0 before the first. */
+  private lastCheck = 0
+  private icr: IcrGet | undefined
 
   constructor(private readonly deps: CredentialServiceDeps) {}
+
+  private now(): number {
+    return this.deps.now?.() ?? Date.now()
+  }
 
   current(): CredentialsStatus {
     const pending = this.deps.signIn.pending
     const github: GitHubCredential = { ...this.github }
     if (this.deps.signIn.active) github.signIn = pending ? { ...pending } : {}
-    return { github, artifactory: { ...this.artifactory } }
+    return {
+      github,
+      artifactory: { ...this.artifactory },
+      ibmCloud: { ...this.ibmCloud },
+    }
   }
 
-  /** The last result; the first call runs the checks. */
+  /** The last result; checks first when never or over STALE_AFTER_MS ago. */
   async get(): Promise<CredentialsStatus> {
-    if (!this.checked) return this.check()
+    if (this.lastCheck === 0 || this.now() - this.lastCheck > STALE_AFTER_MS)
+      return this.check()
     return this.current()
   }
 
-  /** Runs both checks; concurrent callers share one run. */
+  /**
+   * Runs all checks; concurrent callers share one run. The IBM Cloud check
+   * may wait for a login in the browser, so it is not awaited: its result
+   * arrives as a change.
+   */
   check(): Promise<CredentialsStatus> {
-    this.checking ??= Promise.all([this.checkGitHub(), this.checkArtifactory()])
-      .then(() => {
-        this.checked = true
-        return this.current()
-      })
-      .finally(() => {
-        this.checking = null
-      })
+    this.checking ??= (async () => {
+      void this.checkIbmCloud()
+      await Promise.all([this.checkGitHub(), this.checkArtifactory()])
+      this.lastCheck = this.now()
+      return this.current()
+    })().finally(() => {
+      this.checking = null
+    })
     return this.checking
+  }
+
+  /** Stops waiting for the IBM Cloud login (the helper is stopped). */
+  cancelIbmCloudSignIn(): void {
+    this.icr?.cancel()
   }
 
   /**
@@ -164,14 +198,87 @@ export class CredentialService {
 
   // -------------------------------------------------------------------------
 
+  private stamp(): string {
+    return new Date(this.now()).toISOString()
+  }
+
   private async checkGitHub(): Promise<void> {
     const { host } = this.deps
-    this.github = await githubStatus(host)
+    this.github = { ...(await githubStatus(host)), checkedAt: this.stamp() }
     this.emit()
   }
 
   private async checkArtifactory(): Promise<void> {
-    this.artifactory = await this.artifactoryStatus()
+    this.artifactory = {
+      ...(await this.artifactoryStatus()),
+      checkedAt: this.stamp(),
+    }
+    this.emit()
+  }
+
+  /**
+   * Asks docker-credential-icr for an icr.io token, as Docker does: it
+   * answers from its store, refreshes, or opens the IBM Cloud login.
+   */
+  private async checkIbmCloud(): Promise<void> {
+    if (this.icr) return
+    const base = { registry: ICR_REGISTRY }
+    const helper = await findIcrHelper(this.deps.host, this.deps.binDir)
+    if (!helper) {
+      this.ibmCloud = {
+        ...base,
+        state: "no-helper",
+        detail:
+          "docker-credential-icr is not installed. Install it under This computer.",
+        checkedAt: this.stamp(),
+      }
+      this.emit()
+      return
+    }
+    const run = icrGet(this.deps.host, helper)
+    this.icr = run
+    // A stored or refreshed token answers within seconds; after that the
+    // helper waits for the login in the browser.
+    const waiting = setTimeout(() => {
+      this.ibmCloud = { ...this.ibmCloud, signingIn: true }
+      this.emit()
+    }, 3_000)
+    const result = await run.done
+    clearTimeout(waiting)
+    this.icr = undefined
+    switch (result.kind) {
+      case "ok": {
+        const who = result.email ?? result.name
+        this.ibmCloud = {
+          ...base,
+          state: "ok",
+          detail: who ? `Logged in as ${who}.` : "Logged in.",
+          account: {
+            ...(result.email ? { email: result.email } : {}),
+            ...(result.name ? { name: result.name } : {}),
+          },
+          checkedAt: this.stamp(),
+        }
+        break
+      }
+      case "cancelled":
+        this.ibmCloud = {
+          ...base,
+          state: "signed-out",
+          detail: "Not logged in: the login was cancelled.",
+          checkedAt: this.stamp(),
+        }
+        break
+      case "failed":
+        this.ibmCloud = {
+          ...base,
+          state: "unknown",
+          detail: result.detail,
+          checkedAt: this.stamp(),
+        }
+        break
+    }
+    this.deps.log?.(`credentials: IBM Cloud ${this.ibmCloud.state}`)
     this.emit()
   }
 

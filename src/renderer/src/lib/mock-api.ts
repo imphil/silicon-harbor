@@ -18,6 +18,7 @@ import type {
   CredentialsStatus,
   Environment,
   GitHubCredential,
+  IbmCloudCredential,
   IdeId,
   IdeStatus,
   LogLine,
@@ -284,10 +285,20 @@ const MOCK_GITHUB_OK: GitHubCredential = {
   scopes: ["gist", "read:org", "repo"],
 }
 
-function mockCredentials(scenario: MockScenario): CredentialsStatus {
+const MOCK_IBM_CLOUD_OK: IbmCloudCredential = {
+  registry: "icr.io",
+  state: "ok",
+  detail: "Logged in as jane.doe@ibm.com.",
+  account: { email: "jane.doe@ibm.com", name: "Jane Doe" },
+}
+
+function mockCredentials(
+  scenario: MockScenario,
+  checkedAt: string,
+): CredentialsStatus {
   // A new user (setup or no environments yet) has no sign-ins either.
   const fresh = scenario === "first-run" || scenario === "empty"
-  return {
+  const status: CredentialsStatus = {
     github: fresh
       ? {
           host: "github.ibm.com",
@@ -303,7 +314,18 @@ function mockCredentials(scenario: MockScenario): CredentialsStatus {
           detail: "Artifactory accepts the token.",
           user: "jane.doe@ibm.com",
         },
+    ibmCloud: fresh
+      ? {
+          registry: "icr.io",
+          state: "signed-out",
+          detail: "Not logged in yet.",
+        }
+      : MOCK_IBM_CLOUD_OK,
   }
+  status.github.checkedAt = checkedAt
+  status.artifactory.checkedAt = checkedAt
+  status.ibmCloud.checkedAt = checkedAt
+  return status
 }
 
 // Wording after a fix, matching the real checks (src/main/requirements).
@@ -375,8 +397,12 @@ export function createMockApi(options: MockOptions = {}): SiliconHarborApi {
   const logListeners = new Set<{ id: string; cb: (line: LogLine) => void }>()
   const reqListeners = new Set<(reqs: RequirementStatus[]) => void>()
   const credListeners = new Set<(status: CredentialsStatus) => void>()
-  let credentials: CredentialsStatus = mockCredentials(scenario)
+  let credentials: CredentialsStatus = mockCredentials(
+    scenario,
+    iso(4 * 60_000),
+  )
   let signInRun = 0
+  let ibmRun = 0
 
   const delay = (ms: number) =>
     new Promise<void>((resolve) => setTimeout(resolve, Math.round(ms * speed)))
@@ -386,6 +412,21 @@ export function createMockApi(options: MockOptions = {}): SiliconHarborApi {
   function emitEnvs(): void {
     const snapshot = list()
     for (const cb of envListeners) cb(snapshot)
+  }
+
+  /** docker-credential-icr opening the IBM Cloud login, which the user finishes. */
+  async function mockIbmCloudLogin(): Promise<void> {
+    const run = ++ibmRun
+    setCredentials({
+      ...credentials,
+      ibmCloud: { ...credentials.ibmCloud, signingIn: true },
+    })
+    await delay(3000)
+    if (run !== ibmRun) return
+    setCredentials({
+      ...credentials,
+      ibmCloud: { ...MOCK_IBM_CLOUD_OK, checkedAt: iso() },
+    })
   }
 
   function setCredentials(next: CredentialsStatus): CredentialsStatus {
@@ -874,7 +915,33 @@ export function createMockApi(options: MockOptions = {}): SiliconHarborApi {
 
     async checkCredentials() {
       await delay(600)
-      return structuredClone(credentials)
+      const checkedAt = iso()
+      const stamp = <T extends { checkedAt?: string }>(c: T) => ({
+        ...c,
+        checkedAt,
+      })
+      if (credentials.ibmCloud.state !== "ok") void mockIbmCloudLogin()
+      return setCredentials({
+        github: stamp(credentials.github),
+        artifactory: stamp(credentials.artifactory),
+        ibmCloud:
+          credentials.ibmCloud.state === "ok"
+            ? stamp(credentials.ibmCloud)
+            : credentials.ibmCloud,
+      })
+    },
+
+    async cancelIbmCloudSignIn() {
+      ibmRun++
+      setCredentials({
+        ...credentials,
+        ibmCloud: {
+          registry: "icr.io",
+          state: "signed-out",
+          detail: "Not logged in: the login was cancelled.",
+          checkedAt: iso(),
+        },
+      })
     },
 
     async signInGitHub() {
@@ -895,7 +962,10 @@ export function createMockApi(options: MockOptions = {}): SiliconHarborApi {
       })
       await delay(4000)
       if (run !== signInRun) return
-      setCredentials({ ...credentials, github: MOCK_GITHUB_OK })
+      setCredentials({
+        ...credentials,
+        github: { ...MOCK_GITHUB_OK, checkedAt: iso() },
+      })
     },
 
     async cancelGitHubSignIn() {

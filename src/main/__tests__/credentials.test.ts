@@ -13,11 +13,30 @@ import {
   parseApiResponse,
   parseSignInLine,
 } from "../credentials/github"
+import {
+  accountFromCredentials,
+  ICR_REGISTRY,
+  icrGet,
+} from "../credentials/ibmcloud"
 import { CredentialService, type SecretStore } from "../credentials/service"
 import type { SecretEntry } from "../devsy/schemas"
-import { FakeHost, fail, ok } from "./fake-host"
+import { FakeHost, type FakeProcess, fail, ok } from "./fake-host"
 
 const GH = "/usr/bin/gh"
+const BIN_DIR = "/home/dev/.local/bin"
+const ICR = `${BIN_DIR}/docker-credential-icr`
+
+/** A credential helper answer with an IAM-like JWT (unsigned, test only). */
+function icrAnswer(claims: Record<string, unknown>): string {
+  const part = (o: unknown) =>
+    Buffer.from(JSON.stringify(o)).toString("base64url")
+  const jwt = `${part({ alg: "none" })}.${part(claims)}.sig`
+  return JSON.stringify({
+    ServerURL: "icr.io",
+    Username: "iambearer",
+    Secret: jwt,
+  })
+}
 const HOSTS = "/home/dev/.config/gh/hosts.yml"
 const SIGNED_IN = "github.ibm.com:\n    user: dev\n"
 const USER_RESPONSE = [
@@ -243,20 +262,24 @@ describe("credential service", () => {
     const changes: CredentialsStatus[] = []
     const signIn = new GitHubSignIn({ host, onChange: () => {} })
     const fetchFn = vi.fn(async () => new Response("", { status: fetchStatus }))
+    const clock = { now: Date.parse("2026-11-20T12:00:00Z") }
     const creds = new CredentialService({
       host,
       secrets,
       signIn,
+      binDir: BIN_DIR,
       fetch: fetchFn,
       onChange: (s) => changes.push(s),
+      now: () => clock.now,
     })
-    return { host, secrets, creds, changes, fetchFn }
+    return { host, secrets, creds, changes, fetchFn, clock }
   }
 
   it("shows the GitHub account and a missing Artifactory token", async () => {
     const { creds } = service()
     const status = await creds.get()
     expect(status.github).toEqual({
+      checkedAt: "2026-11-20T12:00:00.000Z",
       host: "github.ibm.com",
       state: "ok",
       detail: "Signed in as dev (Dev Eloper).",
@@ -267,6 +290,7 @@ describe("credential service", () => {
       url: "https://eu.artifactory.swg-devops.com/",
       state: "missing",
       detail: "No token stored.",
+      checkedAt: "2026-11-20T12:00:00.000Z",
     })
   })
 
@@ -351,5 +375,144 @@ describe("credential service", () => {
       detail: "Not signed in.",
     })
     expect(host.runs.some((r) => r.includes("api"))).toBe(false)
+  })
+})
+
+describe("IBM Cloud (docker-credential-icr)", () => {
+  it("reads the account from the token, never more", () => {
+    expect(
+      accountFromCredentials(
+        icrAnswer({ email: "dev@ibm.com", name: "Dev Eloper", exp: 1 }),
+      ),
+    ).toEqual({ email: "dev@ibm.com", name: "Dev Eloper" })
+    expect(accountFromCredentials('{"Secret":"opaque"}')).toEqual({})
+    expect(accountFromCredentials("not json")).toBeNull()
+  })
+
+  it("asks the helper for icr.io on stdin, like Docker", async () => {
+    const host = ghHost()
+    let input: string | undefined
+    host.onStart[`${ICR} get`] = (p) => {
+      input = p.input
+      p.line(icrAnswer({ email: "dev@ibm.com" }), "stdout")
+      p.exit(0)
+    }
+    expect(await icrGet(host, ICR).done).toEqual({
+      kind: "ok",
+      email: "dev@ibm.com",
+    })
+    expect(input).toBe(`${ICR_REGISTRY}\n`)
+  })
+
+  it("reports the helper's error, and a cancelled login", async () => {
+    const host = ghHost()
+    host.onStart[`${ICR} get`] = (p) => {
+      p.line("OAuth flow failed: access denied", "stderr")
+      p.exit(1)
+    }
+    expect(await icrGet(host, ICR).done).toEqual({
+      kind: "failed",
+      detail: "docker-credential-icr failed: OAuth flow failed: access denied",
+    })
+    host.onStart[`${ICR} get`] = () => {}
+    const run = icrGet(host, ICR)
+    run.cancel()
+    expect(await run.done).toEqual({ kind: "cancelled" })
+  })
+
+  function withHelper(answer: (p: FakeProcess) => void) {
+    const host = ghHost()
+    host.files[ICR] = ""
+    host.onStart[`${ICR} get`] = answer
+    const changes: CredentialsStatus[] = []
+    const creds = new CredentialService({
+      host,
+      secrets: new FakeSecrets(),
+      signIn: new GitHubSignIn({ host, onChange: () => {} }),
+      binDir: BIN_DIR,
+      fetch: vi.fn(async () => new Response("", { status: 200 })),
+      onChange: (s) => changes.push(s),
+    })
+    return { host, creds, changes }
+  }
+
+  it("checks the login with the other credentials, without waiting for it", async () => {
+    const { creds, changes } = withHelper((p) => {
+      setTimeout(() => {
+        p.line(icrAnswer({ email: "dev@ibm.com", name: "Dev" }), "stdout")
+        p.exit(0)
+      }, 20)
+    })
+    const first = await creds.check()
+    expect(first.ibmCloud.state).toBe("unknown")
+    await vi.waitFor(() =>
+      expect(changes.at(-1)?.ibmCloud).toMatchObject({
+        state: "ok",
+        detail: "Logged in as dev@ibm.com.",
+        account: { email: "dev@ibm.com", name: "Dev" },
+      }),
+    )
+  })
+
+  it("shows when the helper waits for the login in the browser, and can stop it", async () => {
+    vi.useFakeTimers()
+    try {
+      const { creds, changes } = withHelper(() => {})
+      await creds.check()
+      await vi.advanceTimersByTimeAsync(3_500)
+      expect(changes.at(-1)?.ibmCloud.signingIn).toBe(true)
+      creds.cancelIbmCloudSignIn()
+      await vi.advanceTimersByTimeAsync(10)
+      expect(changes.at(-1)?.ibmCloud).toMatchObject({
+        state: "signed-out",
+        detail: "Not logged in: the login was cancelled.",
+      })
+      expect(changes.at(-1)?.ibmCloud.signingIn).toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("points to This computer when the helper is missing", async () => {
+    const host = ghHost()
+    const changes: CredentialsStatus[] = []
+    const creds = new CredentialService({
+      host,
+      secrets: new FakeSecrets(),
+      signIn: new GitHubSignIn({ host, onChange: () => {} }),
+      binDir: BIN_DIR,
+      onChange: (s) => changes.push(s),
+    })
+    await creds.check()
+    await vi.waitFor(() =>
+      expect(changes.at(-1)?.ibmCloud.state).toBe("no-helper"),
+    )
+    expect(host.starts).toEqual([])
+  })
+})
+
+describe("credential freshness", () => {
+  it("checks again when the last check is over 10 minutes old", async () => {
+    const host = ghHost()
+    const clock = { now: Date.parse("2026-11-20T12:00:00Z") }
+    const creds = new CredentialService({
+      host,
+      secrets: new FakeSecrets(),
+      signIn: new GitHubSignIn({ host, onChange: () => {} }),
+      binDir: BIN_DIR,
+      fetch: vi.fn(async () => new Response("", { status: 200 })),
+      onChange: () => {},
+      now: () => clock.now,
+    })
+    const apiCalls = () => host.runs.filter((r) => r.includes(" api ")).length
+    await creds.get()
+    expect(apiCalls()).toBe(1)
+    clock.now += 9 * 60_000
+    await creds.get()
+    expect(apiCalls()).toBe(1)
+    clock.now += 2 * 60_000
+    const status = await creds.get()
+    expect(apiCalls()).toBe(2)
+    expect(status.github.checkedAt).toBe("2026-11-20T12:11:00.000Z")
   })
 })

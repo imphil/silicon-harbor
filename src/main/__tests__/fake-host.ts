@@ -32,7 +32,9 @@ export const notFound: RunResult = {
 
 /** A process started with FakeHost.start, driven by the test. */
 export interface FakeProcess {
-  line(text: string): void
+  line(text: string, stream?: "stdout" | "stderr"): void
+  /** What the caller wrote to stdin. */
+  input?: string
   exit(code: number | null): void
   killed: boolean
 }
@@ -181,7 +183,8 @@ export class FakeHost implements Host {
       resolve = r
     })
     const process: FakeProcess = {
-      line: (text) => options.onLine(text),
+      line: (text, stream = "stderr") => options.onLine(text, stream),
+      input: options.input,
       exit: (code) => resolve(code),
       killed: false,
     }

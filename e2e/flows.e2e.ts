@@ -186,6 +186,9 @@ test("Credentials: GitHub sign-in with a one-time code, then an Artifactory toke
   await expect(page.getByTestId("cred-github")).toContainText(
     "Signed in as jdoe (Jane Doe).",
   )
+  await expect(page.getByTestId("github-checked")).toHaveText(
+    "Checked 4 minutes ago",
+  )
 
   // A fresh machine: not signed in, no token.
   await openMock(launched, {
@@ -219,6 +222,17 @@ test("Credentials: GitHub sign-in with a one-time code, then an Artifactory toke
   await expect(
     artifactory.getByRole("button", { name: "Replace token" }),
   ).toBeVisible()
+  // IBM Cloud: "Log in" asks docker-credential-icr, which opens the login.
+  const ibmCloud = page.getByTestId("cred-ibmcloud")
+  await expect(ibmCloud).toContainText("Not logged in yet.")
+  await ibmCloud.getByRole("button", { name: "Log in" }).click()
+  await expect(page.getByTestId("ibmcloud-sign-in")).toContainText(
+    "Log in to IBM Cloud in the browser window that opened.",
+  )
+  await expect(ibmCloud).toContainText("Logged in as jane.doe@ibm.com.", {
+    timeout: 10_000,
+  })
+  await expect(page.getByTestId("github-checked")).toContainText("Checked")
   if (process.env.SH_SCREENSHOT_DIR)
     await page.screenshot({
       path: `${process.env.SH_SCREENSHOT_DIR}/settings-credentials.png`,

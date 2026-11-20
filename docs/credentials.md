@@ -54,14 +54,42 @@ Artifactory has no sign-in flow Silicon Harbor can drive. The pane shows how to 
 ### What the environment sees (verified 2026-11-20, Linux, `--clone-into-volume`, Devsy phw.6)
 
 - `/run/secrets` is a tmpfs (`mode=755`, `noexec`) owned by root; each file is `0600`, owned by the container user.
+- If `devcontainer.json` mounts its own volume at `/run/secrets` (electric-vapor's `electric-vapor-secrets`, shared
+  by its containers), Devsy writes the files into that volume instead (fork, from phw.8; before, Docker failed
+  with "Duplicate mount point"). They then persist there and every container with that volume sees a new value at
+  once. No recreation is needed. Verified 2026-11-20 on Linux with a volume clone.
 - The files exist before the lifecycle hooks run: a deferred `postCreateCommand` read both as the container user.
 - `mkdir -p /run/secrets` succeeds; new files cannot be created there (root-owned directory), existing ones can be
   overwritten by the container user.
 - Every `up` rewrites the files, so a new token reaches an environment at its next start (per Devsy's source,
   `pkg/devcontainer/setup/setup.go`; not tested yet).
 - Devsy masks the values in hook output and setup history (`***`), including the w3id.
-- An environment created without these secrets is recreated once when it first starts with them (Devsy needs the
-  tmpfs mount); changes outside the source folder are lost then. The pane says so.
+- Without such a volume, an environment created without these secrets is recreated once when it first starts with
+  them (Devsy needs the tmpfs mount); changes outside the source folder are lost then. The pane says so.
+
+## IBM Cloud (icr.io)
+
+docker-credential-icr holds the IBM Cloud login Docker uses for icr.io images (environment images, the volume-clone
+helper). It stores the token in the OS password store, refreshes it, and opens the IBM Cloud login in the browser
+when it has no valid one.
+
+- **Check:** Silicon Harbor asks the helper like Docker does (`docker-credential-icr get`, `icr.io` on stdin). A
+  stored or refreshed token answers within seconds. Otherwise the pane shows "Log in to IBM Cloud in the browser
+  window that opened" with Cancel, so the login comes there and not in the middle of creating an environment.
+  It stops waiting after 10 minutes.
+- **Account:** read from the token (an IAM JWT: `email`, `name`; not verified, only shown). The answer is never
+  logged or passed on.
+- **When:** with the other credentials, when the pane opens (and the last check is over 10 minutes old) or on
+  "Check again". Never in the background: that could open a browser unexpectedly.
+
+## How current the states are
+
+| Page          | Checked                                                                                                                                                                                            |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| This computer | At app start, after each fix, on "Check again", when the page opens and the last check is over 10 minutes old, and every hour in the background (keeps the header's Ready / issue status current). |
+| Credentials   | When the pane opens and the last check is over 10 minutes old, on "Check again", after a sign-in or a saved token. Not in the background.                                                          |
+
+Each entry shows "Checked … ago".
 
 ## Lifecycle hooks: what they can use
 

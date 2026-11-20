@@ -10,6 +10,8 @@ export class RequirementStore {
   list = $state<RequirementStatus[]>([])
   checking = $state(false)
   loaded = $state(false)
+  /** ISO 8601: when the list was last checked (not just fixed). */
+  checkedAt = $state<string | undefined>(undefined)
   loadError = $state("")
   private unsubscribe?: () => void
 
@@ -27,6 +29,10 @@ export class RequirementStore {
     this.unsubscribe = this.api().onRequirementsChanged((reqs) => {
       this.list = reqs
       this.loaded = true
+      // Every complete result (a check, also the hourly one in the
+      // background) arrives here; one with a fix still running is partial.
+      if (!reqs.some((r) => r.state === "working"))
+        this.checkedAt = new Date().toISOString()
     })
     await this.check()
   }
@@ -40,6 +46,7 @@ export class RequirementStore {
     this.checking = true
     try {
       this.list = await this.api().checkRequirements()
+      this.checkedAt = new Date().toISOString()
       this.loadError = ""
     } catch (error) {
       this.loadError = error instanceof Error ? error.message : String(error)
@@ -47,6 +54,12 @@ export class RequirementStore {
       this.checking = false
       this.loaded = true
     }
+  }
+
+  /** Checks again when the last check is older than maxAgeMs. */
+  async checkIfOlderThan(maxAgeMs: number): Promise<void> {
+    const at = this.checkedAt ? Date.parse(this.checkedAt) : 0
+    if (!this.checking && Date.now() - at > maxAgeMs) await this.check()
   }
 
   fix(id: RequirementId) {

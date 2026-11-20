@@ -52,8 +52,10 @@ export interface StartedProcess {
 }
 
 export interface StartOptions {
-  /** Every output line (stdout and stderr), as it arrives. */
-  onLine(line: string): void
+  /** Every output line, as it arrives. Never logged here. */
+  onLine(line: string, stream: "stdout" | "stderr"): void
+  /** Written to stdin, which is then closed; without it stdin is closed at once. */
+  input?: string
 }
 
 export interface Host {
@@ -84,7 +86,7 @@ export interface Host {
   /**
    * Starts a long-running command whose output is needed while it runs, such
    * as `gh auth login --web` printing its one-time code. No time limit; stdin
-   * is closed, so the command knows nobody can type.
+   * gets options.input or nothing, so the command knows nobody can type.
    */
   start(cmd: string, args: string[], options: StartOptions): StartedProcess
 }
@@ -253,14 +255,21 @@ export class NodeHost implements Host {
     this.options.log?.(`$ ${[cmd, ...args].map(quoteArg).join(" ")} (started)`)
     const child = spawn(cmd, args, {
       env: this.env,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: [options.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
       windowsHide: true,
     })
-    for (const stream of [child.stdout, child.stderr]) {
+    if (options.input !== undefined) {
+      child.stdin?.on("error", () => {})
+      child.stdin?.end(options.input)
+    }
+    for (const [stream, name] of [
+      [child.stdout, "stdout"],
+      [child.stderr, "stderr"],
+    ] as const) {
       if (!stream) continue
       createInterface({ input: stream, crlfDelay: Infinity }).on(
         "line",
-        (line) => options.onLine(stripControl(line)),
+        (line) => options.onLine(stripControl(line), name),
       )
     }
     const done = new Promise<number | null>((resolve) => {

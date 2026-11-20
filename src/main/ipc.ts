@@ -38,6 +38,7 @@ export interface IpcDeps {
     | "check"
     | "signInGitHub"
     | "cancelGitHubSignIn"
+    | "cancelIbmCloudSignIn"
     | "saveArtifactory"
     | "removeArtifactory"
   >
@@ -152,6 +153,7 @@ export function registerIpc(deps: IpcDeps): void {
   on(IpcChannel.credCheck, () => credentials().check())
   on(IpcChannel.credGitHubSignIn, () => credentials().signInGitHub())
   on(IpcChannel.credGitHubCancel, () => credentials().cancelGitHubSignIn())
+  on(IpcChannel.credIbmCloudCancel, () => credentials().cancelIbmCloudSignIn())
   on(IpcChannel.credArtifactorySave, (req) =>
     credentials().saveArtifactory(SaveArtifactorySchema.parse(req)),
   )

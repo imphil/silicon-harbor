@@ -18,9 +18,13 @@ export class CredentialStore {
 
   constructor(private readonly api: () => SiliconHarborApi) {}
 
+  /**
+   * Subscribes once; every call (each time the pane opens) asks for the
+   * status, which the main process checks again when it is over 10 minutes
+   * old.
+   */
   async init(): Promise<void> {
-    if (this.unsubscribe) return
-    this.unsubscribe = this.api().onCredentialsChanged((status) => {
+    this.unsubscribe ??= this.api().onCredentialsChanged((status) => {
       this.status = status
     })
     await this.load(() => this.api().getCredentials())
@@ -50,6 +54,12 @@ export class CredentialStore {
   signInGitHub() {
     return attempt("Could not sign in to GitHub", () =>
       this.api().signInGitHub(),
+    )
+  }
+
+  cancelIbmCloudSignIn() {
+    return attempt("Could not stop the IBM Cloud login", () =>
+      this.api().cancelIbmCloudSignIn(),
     )
   }
 
