@@ -1,5 +1,6 @@
 export const settingsSections = [
   { id: "computer", label: "This computer" },
+  { id: "credentials", label: "Credentials" },
   { id: "ide", label: "IDE" },
   { id: "updates", label: "Updates" },
   { id: "support", label: "Support" },

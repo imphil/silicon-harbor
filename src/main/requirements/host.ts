@@ -13,7 +13,7 @@ import {
 } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { delimiter, dirname, join } from "node:path"
-import { linuxTerminalCommands, startFirst } from "../terminal"
+import { createInterface } from "node:readline"
 import { elevatedCommand } from "./elevate"
 
 /**
@@ -37,6 +37,23 @@ export interface RunOptions {
   timeoutMs?: number
   /** Extra environment variables on top of the host environment. */
   env?: Record<string, string>
+  /**
+   * Log only the command and its outcome, not its output (it holds personal
+   * data such as an account's name and email address).
+   */
+  quiet?: boolean
+}
+
+/** A process started with Host.start, still running. */
+export interface StartedProcess {
+  /** Resolves with the exit code (null when it could not start or was killed). */
+  done: Promise<number | null>
+  kill(): void
+}
+
+export interface StartOptions {
+  /** Every output line (stdout and stderr), as it arrives. */
+  onLine(line: string): void
 }
 
 export interface Host {
@@ -65,10 +82,11 @@ export interface Host {
   remove(path: string): Promise<void>
   openExternal(url: string): Promise<void>
   /**
-   * Runs argv in a new terminal window (Linux), for interactive steps such as
-   * `gh auth login`. Returns once the window was started.
+   * Starts a long-running command whose output is needed while it runs, such
+   * as `gh auth login --web` printing its one-time code. No time limit; stdin
+   * is closed, so the command knows nobody can type.
    */
-  openTerminal(argv: string[]): Promise<void>
+  start(cmd: string, args: string[], options: StartOptions): StartedProcess
 }
 
 const MAX_OUTPUT = 1024 * 1024
@@ -123,7 +141,10 @@ export class NodeHost implements Host {
   run(cmd: string, args: string[], options: RunOptions = {}) {
     const started = Date.now()
     return this.spawnCollect(cmd, args, options).then((result) => {
-      this.options.log?.(formatRun(cmd, args, result, Date.now() - started))
+      const logged = options.quiet
+        ? { ...result, stdout: "", stderr: "" }
+        : result
+      this.options.log?.(formatRun(cmd, args, logged, Date.now() - started))
       return result
     })
   }
@@ -227,9 +248,36 @@ export class NodeHost implements Host {
     return null
   }
 
-  async openTerminal(argv: string[]) {
-    this.options.log?.(`terminal: ${argv.join(" ")}`)
-    await startFirst(linuxTerminalCommands(argv, this.env.TERMINAL))
+  start(cmd: string, args: string[], options: StartOptions): StartedProcess {
+    const started = Date.now()
+    this.options.log?.(`$ ${[cmd, ...args].map(quoteArg).join(" ")} (started)`)
+    const child = spawn(cmd, args, {
+      env: this.env,
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    })
+    for (const stream of [child.stdout, child.stderr]) {
+      if (!stream) continue
+      createInterface({ input: stream, crlfDelay: Infinity }).on(
+        "line",
+        (line) => options.onLine(stripControl(line)),
+      )
+    }
+    const done = new Promise<number | null>((resolve) => {
+      child.once("error", () => resolve(null))
+      child.once("close", (code) => resolve(code))
+    }).then((code) => {
+      this.options.log?.(
+        `$ ${cmd} … → exit ${code} (${Date.now() - started} ms)`,
+      )
+      return code
+    })
+    return {
+      done,
+      kill: () => {
+        if (child.exitCode === null && child.signalCode === null) child.kill()
+      },
+    }
   }
 
   async exists(path: string) {
@@ -285,6 +333,12 @@ export class NodeHost implements Host {
 const LOG_OUTPUT_LINES = 15
 
 /** One setup-log entry: command, outcome, duration and the end of the output. */
+/** Strips ANSI escape sequences (gh colours its output when it can). */
+function stripControl(line: string): string {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape sequences use control characters by definition
+  return line.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "")
+}
+
 export function formatRun(
   cmd: string,
   args: string[],

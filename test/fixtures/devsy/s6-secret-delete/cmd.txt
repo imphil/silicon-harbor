@@ -1,0 +1,2 @@
+devsy secret delete SH_ARTIFACTORY_TOKEN --log-level info --log-output json --result-format json
+# duration-ms: 70

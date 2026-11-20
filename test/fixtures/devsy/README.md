@@ -22,4 +22,5 @@ Redacted placeholders: `$DEVSY_HOME`, `$SCRATCH`, `$HOME`, `$USER`, `$HOSTNAME`.
 | `l*` | setup log store: list runs, read latest run |
 | `m*` | Docker daemon unreachable |
 | `n*` | `up --clone-into-volume` (source in a Docker volume, via a bootstrap container); our fork with the bootstrap status fix |
+| `s*` | `context set -o SSH_INJECT_GITHUB_CREDENTIALS=true`; `secret list` (empty, one entry), `secret set --stdin`, `secret get`, `secret delete` (dummy value; recorded with the OS keyring backend, entry deleted again) |
 | `x-*` | DEVSY_HOME too long → agent socket path limit (recorded with a long home) |

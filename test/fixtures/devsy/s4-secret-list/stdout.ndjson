@@ -1,0 +1,10 @@
+[
+  {
+    "name": "SH_ARTIFACTORY_TOKEN",
+    "context": "default",
+    "backend": "keyring",
+    "created": "2026-11-20T09:30:44Z",
+    "availability": "available",
+    "attached": false
+  }
+]

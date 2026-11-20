@@ -185,3 +185,54 @@ describe("DevsyClient", () => {
     expect(kinds.filter((k) => k === "status").length).toBeGreaterThan(10)
   })
 })
+
+describe("DevsyClient secrets", () => {
+  it("lists secrets by name and availability", async () => {
+    const client = new DevsyClient(
+      new FixtureCli(by({ "secret list": "s4-secret-list" })),
+    )
+    expect(await client.listSecrets()).toMatchObject([
+      { name: "SH_ARTIFACTORY_TOKEN", availability: "available" },
+    ])
+    const empty = new DevsyClient(
+      new FixtureCli(by({ "secret list": "s2-secret-list-empty" })),
+    )
+    expect(await empty.listSecrets()).toEqual([])
+  })
+
+  it("reads a value without the trailing newline", async () => {
+    const client = new DevsyClient(
+      new FixtureCli(by({ "secret get": "s5-secret-get" })),
+    )
+    expect(await client.getSecret("SH_ARTIFACTORY_TOKEN")).toBe(
+      "fixture-token-value",
+    )
+  })
+
+  it("stores a value through stdin, never as an argument", async () => {
+    const seen: Array<{ args: string[]; input?: string }> = []
+    const cli = new FixtureCli(by({ "secret set": "s3-secret-set" }))
+    const exec = cli.exec.bind(cli)
+    cli.exec = (args, options) => {
+      seen.push({ args, input: options?.input })
+      return exec(args, options)
+    }
+    await new DevsyClient(cli).setSecret("SH_ARTIFACTORY_TOKEN", "tok")
+    expect(seen).toEqual([
+      {
+        args: ["secret", "set", "SH_ARTIFACTORY_TOKEN", "--stdin"],
+        input: "tok\n",
+      },
+    ])
+  })
+
+  it("sets context options", async () => {
+    const cli = new FixtureCli(by({ "context set": "s1-context-set" }))
+    await new DevsyClient(cli).setContextOptions({
+      SSH_INJECT_GITHUB_CREDENTIALS: "true",
+    })
+    expect(cli.calls).toEqual([
+      ["context", "set", "-o", "SSH_INJECT_GITHUB_CREDENTIALS=true"],
+    ])
+  })
+})

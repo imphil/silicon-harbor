@@ -176,6 +176,56 @@ test("IDE settings: one row per IDE, default choice and downloads", async () => 
     })
 })
 
+test("Credentials: GitHub sign-in with a one-time code, then an Artifactory token", async () => {
+  const page = await openMock(launched, { route: "/settings/computer" })
+  await page
+    .getByTestId("requirement-git-credentials")
+    .getByRole("link", { name: "Manage credentials" })
+    .click()
+  await expect(page).toHaveURL(/#\/settings\/credentials$/)
+  await expect(page.getByTestId("cred-github")).toContainText(
+    "Signed in as jdoe (Jane Doe).",
+  )
+
+  // A fresh machine: not signed in, no token.
+  await openMock(launched, {
+    scenario: "empty",
+    route: "/settings/credentials",
+    speed: 0.5,
+  })
+  const github = page.getByTestId("cred-github")
+  await expect(github).toContainText("Not signed in")
+  await github.getByRole("button", { name: "Sign in" }).click()
+  const signIn = page.getByTestId("github-sign-in")
+  await expect(signIn).toContainText("WDJB-MJHT")
+  await expect(
+    signIn.getByRole("link", { name: "Open github.ibm.com" }),
+  ).toHaveAttribute("href", "https://github.ibm.com/login/device")
+  await expect(github).toContainText("Signed in as jdoe (Jane Doe).", {
+    timeout: 10_000,
+  })
+
+  const artifactory = page.getByTestId("cred-artifactory")
+  await expect(artifactory).toContainText("No token stored.")
+  await expect(artifactory).toContainText("Generate an Identity Token")
+  // The w3id defaults to the GitHub account's email address.
+  await expect(
+    artifactory.getByLabel("w3id (your IBM email address)"),
+  ).toHaveValue("jane.doe@ibm.com")
+  await artifactory.getByLabel("Identity token").fill("cmVmdGtuOjAxOjE3")
+  await artifactory.getByRole("button", { name: "Save and check" }).click()
+  await expect(artifactory).toContainText("Artifactory accepts the token.")
+  await expect(artifactory).toContainText("w3id: jane.doe@ibm.com")
+  await expect(
+    artifactory.getByRole("button", { name: "Replace token" }),
+  ).toBeVisible()
+  if (process.env.SH_SCREENSHOT_DIR)
+    await page.screenshot({
+      path: `${process.env.SH_SCREENSHOT_DIR}/settings-credentials.png`,
+      fullPage: true,
+    })
+})
+
 test("search filters the environment list", async () => {
   const page = await openMock(launched, { scenario: "default" })
   const table = page.locator("table")

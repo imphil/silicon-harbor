@@ -8,7 +8,7 @@ let {
   manageIdeLink = false,
 }: {
   showFixAll?: boolean
-  /** Link the IDE row to Settings › IDE (not during first-run setup). */
+  /** Link the IDE and GitHub rows to their Settings pages (not during first-run setup). */
   manageIdeLink?: boolean
 } = $props()
 
@@ -78,6 +78,10 @@ const needsRelogin = $derived(
             {:else if req.id === "ide" && manageIdeLink}
               <Button kind="ghost" size="small" href="#/settings/ide">
                 Manage IDEs
+              </Button>
+            {:else if req.id === "git-credentials" && manageIdeLink && req.state === "ok"}
+              <Button kind="ghost" size="small" href="#/settings/credentials">
+                Manage credentials
               </Button>
             {/if}
           </span>

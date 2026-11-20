@@ -15,7 +15,9 @@
 import type {
   AppInfo,
   CreateEnvironmentRequest,
+  CredentialsStatus,
   Environment,
+  GitHubCredential,
   IdeId,
   IdeStatus,
   LogLine,
@@ -157,10 +159,10 @@ function requirementsFor(
       icr,
       {
         id: "git-credentials",
-        title: "Git for Windows",
+        title: "GitHub CLI",
         state: "ok",
-        version: "2.51.0",
-        detail: "Includes Git Credential Manager for github.ibm.com.",
+        version: "2.105.0",
+        detail: "Signs Git and the GitHub CLI in to github.ibm.com.",
       },
       {
         id: "ide",
@@ -197,7 +199,7 @@ function requirementsFor(
             id: "git-credentials",
             title: "GitHub CLI",
             state: "warn",
-            version: "2.83.0",
+            version: "2.105.0",
             detail: "Not signed in to github.ibm.com yet.",
             fix: { label: "Sign in" },
           }
@@ -205,8 +207,8 @@ function requirementsFor(
             id: "git-credentials",
             title: "GitHub CLI",
             state: "ok",
-            version: "2.83.0",
-            detail: "Signs Git in to github.ibm.com over HTTPS.",
+            version: "2.105.0",
+            detail: "Signs Git and the GitHub CLI in to github.ibm.com.",
           },
       {
         id: "ide",
@@ -256,10 +258,10 @@ function requirementsFor(
     icr,
     {
       id: "git-credentials",
-      title: "Git Credential Manager",
+      title: "GitHub CLI",
       state: "ok",
-      version: "2.6.1",
-      detail: "Signs in to github.ibm.com over HTTPS.",
+      version: "2.105.0",
+      detail: "Signs Git and the GitHub CLI in to github.ibm.com.",
     },
     {
       id: "ide",
@@ -272,12 +274,44 @@ function requirementsFor(
   ]
 }
 
+const ARTIFACTORY_URL = "https://eu.artifactory.swg-devops.com/"
+
+const MOCK_GITHUB_OK: GitHubCredential = {
+  host: "github.ibm.com",
+  state: "ok",
+  detail: "Signed in as jdoe (Jane Doe).",
+  account: { login: "jdoe", name: "Jane Doe", email: "jane.doe@ibm.com" },
+  scopes: ["gist", "read:org", "repo"],
+}
+
+function mockCredentials(scenario: MockScenario): CredentialsStatus {
+  // A new user (setup or no environments yet) has no sign-ins either.
+  const fresh = scenario === "first-run" || scenario === "empty"
+  return {
+    github: fresh
+      ? {
+          host: "github.ibm.com",
+          state: "signed-out",
+          detail: "Not signed in.",
+        }
+      : MOCK_GITHUB_OK,
+    artifactory: fresh
+      ? { url: ARTIFACTORY_URL, state: "missing", detail: "No token stored." }
+      : {
+          url: ARTIFACTORY_URL,
+          state: "ok",
+          detail: "Artifactory accepts the token.",
+          user: "jane.doe@ibm.com",
+        },
+  }
+}
+
 // Wording after a fix, matching the real checks (src/main/requirements).
 const FIXED_DETAIL: Partial<Record<RequirementId, string>> = {
   "container-engine": "Running with dockerd (moby).",
   xquartz: "Installed. Log out and back in once to finish.",
   "credential-helper": "Signs in to icr.io with your IBM Cloud login.",
-  "git-credentials": "Signs Git in to github.ibm.com over HTTPS.",
+  "git-credentials": "Signs Git and the GitHub CLI in to github.ibm.com.",
 }
 
 /**
@@ -340,6 +374,9 @@ export function createMockApi(options: MockOptions = {}): SiliconHarborApi {
   const envListeners = new Set<(envs: Environment[]) => void>()
   const logListeners = new Set<{ id: string; cb: (line: LogLine) => void }>()
   const reqListeners = new Set<(reqs: RequirementStatus[]) => void>()
+  const credListeners = new Set<(status: CredentialsStatus) => void>()
+  let credentials: CredentialsStatus = mockCredentials(scenario)
+  let signInRun = 0
 
   const delay = (ms: number) =>
     new Promise<void>((resolve) => setTimeout(resolve, Math.round(ms * speed)))
@@ -349,6 +386,13 @@ export function createMockApi(options: MockOptions = {}): SiliconHarborApi {
   function emitEnvs(): void {
     const snapshot = list()
     for (const cb of envListeners) cb(snapshot)
+  }
+
+  function setCredentials(next: CredentialsStatus): CredentialsStatus {
+    credentials = next
+    const snapshot = structuredClone(credentials)
+    for (const cb of credListeners) cb(snapshot)
+    return structuredClone(credentials)
   }
 
   function emitReqs(): void {
@@ -823,6 +867,78 @@ export function createMockApi(options: MockOptions = {}): SiliconHarborApi {
       emitReqs()
     },
 
+    async getCredentials() {
+      await delay(200)
+      return structuredClone(credentials)
+    },
+
+    async checkCredentials() {
+      await delay(600)
+      return structuredClone(credentials)
+    },
+
+    async signInGitHub() {
+      const run = ++signInRun
+      const github = credentials.github
+      setCredentials({ ...credentials, github: { ...github, signIn: {} } })
+      await delay(500)
+      if (run !== signInRun) return
+      setCredentials({
+        ...credentials,
+        github: {
+          ...credentials.github,
+          signIn: {
+            code: "WDJB-MJHT",
+            url: "https://github.ibm.com/login/device",
+          },
+        },
+      })
+      await delay(4000)
+      if (run !== signInRun) return
+      setCredentials({ ...credentials, github: MOCK_GITHUB_OK })
+    },
+
+    async cancelGitHubSignIn() {
+      signInRun++
+      const { signIn: _, ...github } = credentials.github
+      setCredentials({ ...credentials, github })
+    },
+
+    async saveArtifactoryToken(req) {
+      await delay(800)
+      const user = req.user.trim()
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(user))
+        throw new Error(
+          "Enter your w3id, the IBM email address you log in with.",
+        )
+      if (!req.token.trim() && credentials.artifactory.state === "missing")
+        throw new Error("Paste the token you created on the Artifactory page.")
+      const rejected = req.token.trim() === "bad"
+      return setCredentials({
+        ...credentials,
+        artifactory: {
+          ...credentials.artifactory,
+          user,
+          state: rejected ? "invalid" : "ok",
+          detail: rejected
+            ? "Artifactory rejects the stored token (HTTP 401). Create a new one and save it here."
+            : "Artifactory accepts the token.",
+        },
+      })
+    },
+
+    async removeArtifactoryToken() {
+      await delay(300)
+      return setCredentials({
+        ...credentials,
+        artifactory: {
+          url: ARTIFACTORY_URL,
+          state: "missing",
+          detail: "No token stored.",
+        },
+      })
+    },
+
     async getSettings() {
       return { ...settings }
     },
@@ -846,6 +962,11 @@ export function createMockApi(options: MockOptions = {}): SiliconHarborApi {
     onRequirementsChanged(cb) {
       reqListeners.add(cb)
       return () => reqListeners.delete(cb)
+    },
+
+    onCredentialsChanged(cb) {
+      credListeners.add(cb)
+      return () => credListeners.delete(cb)
     },
   }
   return api

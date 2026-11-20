@@ -4,6 +4,7 @@ import type {
   RequirementStatus,
   Settings,
 } from "../../shared/api"
+import type { DeviceCode } from "../credentials/github"
 import { downloadVerified } from "../installers/download"
 import { runInstaller } from "../installers/install"
 import {
@@ -44,6 +45,8 @@ export interface RequirementServiceDeps {
     options?: { binaryDest?: string },
   ): Promise<void>
   sleep?(ms: number): Promise<void>
+  /** The browser sign-in of the GitHub CLI (credentials/github.ts). */
+  signInGitHub?(onCode: (code: DeviceCode) => void): Promise<void>
   requirements?: Requirement[]
   /** Setup log: fixes, their progress and outcome. */
   log?(entry: string): void
@@ -187,6 +190,10 @@ export class RequirementService {
       },
       install: (installer, options) =>
         (deps.install ?? defaultInstall)(ctx, installer, options),
+      signInGitHub: (onCode) =>
+        deps.signInGitHub
+          ? deps.signInGitHub(onCode)
+          : Promise.reject(new Error("Signing in is not available here.")),
       sleep: deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))),
     }
     return ctx

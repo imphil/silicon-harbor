@@ -3,6 +3,7 @@ import type {
   RequirementStatus,
   Settings,
 } from "../../shared/api"
+import type { DeviceCode } from "../credentials/github"
 import type { InstallerId, Manifest } from "../installers/manifest"
 import type { Host } from "./host"
 
@@ -34,6 +35,11 @@ export interface RequirementContext {
   progress(detail: string): void
   /** Downloads, verifies and runs a pinned vendor installer (src/main/installers). */
   install(id: InstallerId, options?: { binaryDest?: string }): Promise<void>
+  /**
+   * Signs the GitHub CLI in through the browser (shared with Settings ›
+   * Credentials). onCode receives the one-time code to show.
+   */
+  signInGitHub(onCode: (code: DeviceCode) => void): Promise<void>
   sleep(ms: number): Promise<void>
 }
 

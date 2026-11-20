@@ -123,6 +123,13 @@ boundary is slow.
   Harbor reads it every 3 s during an `up` (`devsy workspace logs --source
   setup --run <id> --after <cursor>`; `--follow` can end before the run does)
   and shows it in the Log tab as it arrives.
+- Until phw.7 the setup history of a volume clone stopped after the image
+  build: the nested agent's store sealed producer discovery at its first
+  record and rejected the workspace container's records (lifecycle hooks).
+  Fixed in the fork (`refreshDiscoverySealed`).
+- From phw.7 every `up` passes `--wait-for postStartCommand`: all create and
+  start hooks run before the IDE opens, with Git and GitHub CLI credentials
+  (docs/credentials.md). Their output is in the Log tab too.
 - Not used on Fedora: Docker runs natively, and the host folder is fast and
   visible to host tools.
 

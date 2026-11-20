@@ -1,6 +1,12 @@
 import type { Settings } from "../../shared/api"
 import { loadManifest, type Manifest } from "../installers/manifest"
-import type { Host, RunOptions, RunResult } from "../requirements/host"
+import type {
+  Host,
+  RunOptions,
+  RunResult,
+  StartedProcess,
+  StartOptions,
+} from "../requirements/host"
 import type { Pending, RequirementContext } from "../requirements/types"
 
 /**
@@ -22,6 +28,13 @@ export const notFound: RunResult = {
   stdout: "",
   stderr: "ENOENT",
   notFound: true,
+}
+
+/** A process started with FakeHost.start, driven by the test. */
+export interface FakeProcess {
+  line(text: string): void
+  exit(code: number | null): void
+  killed: boolean
 }
 
 export interface FakeHostInit {
@@ -57,10 +70,13 @@ export class FakeHost implements Host {
   writes: Array<{ path: string; content: string }> = []
   copies: Array<{ src: string; dest: string }> = []
   opened: string[] = []
-  /** argv of every openTerminal call. */
-  terminals: string[][] = []
-  /** Side effect of opening a terminal, e.g. the user signing in there. */
-  onTerminal?: (argv: string[]) => void
+  /** "cmd arg1 arg2" of every start() call. */
+  starts: string[] = []
+  /**
+   * Drives a started process by its key (or command alone); runs after
+   * start() returned. Without one, the process exits with 127.
+   */
+  onStart: Record<string, (process: FakeProcess) => void> = {}
   removed: string[] = []
   private tempCount = 0
 
@@ -157,14 +173,33 @@ export class FakeHost implements Host {
     this.opened.push(url)
   }
 
-  async openTerminal(argv: string[]) {
-    this.terminals.push(argv)
-    this.onTerminal?.(argv)
+  start(cmd: string, args: string[], options: StartOptions): StartedProcess {
+    const key = [cmd, ...args].join(" ")
+    this.starts.push(key)
+    let resolve: (code: number | null) => void = () => {}
+    const done = new Promise<number | null>((r) => {
+      resolve = r
+    })
+    const process: FakeProcess = {
+      line: (text) => options.onLine(text),
+      exit: (code) => resolve(code),
+      killed: false,
+    }
+    const driver = this.onStart[key] ?? this.onStart[cmd]
+    setTimeout(() => (driver ? driver(process) : resolve(127)), 0)
+    return {
+      done,
+      kill: () => {
+        process.killed = true
+        resolve(null)
+      },
+    }
   }
 }
 
 export interface FakeContext extends RequirementContext {
   installs: Array<{ id: string; binaryDest?: string }>
+  signIns: number
   progressLog: string[]
   resolved: boolean
 }
@@ -178,6 +213,8 @@ export function fakeContext(
     binDir?: string
     /** Side effect of an install, e.g. making the app appear. */
     onInstall?: (id: string, binaryDest?: string) => void
+    /** The GitHub sign-in: e.g. shows a code, then writes hosts.yml. */
+    onSignIn?: (onCode: (code: { code: string; url: string }) => void) => void
   } = {},
 ): FakeContext {
   const installs: FakeContext["installs"] = []
@@ -188,7 +225,7 @@ export function fakeContext(
     firstRunDone: true,
     ...options.settings,
   }
-  return {
+  const ctx: FakeContext = {
     host,
     manifest: options.manifest ?? loadManifest(),
     binDir:
@@ -210,8 +247,14 @@ export function fakeContext(
       installs.push({ id, binaryDest: opts?.binaryDest })
       options.onInstall?.(id, opts?.binaryDest)
     },
+    signInGitHub: async (onCode) => {
+      ctx.signIns++
+      options.onSignIn?.(onCode)
+    },
     sleep: async () => {},
     installs,
+    signIns: 0,
     progressLog,
   }
+  return ctx
 }

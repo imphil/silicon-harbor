@@ -49,6 +49,11 @@ export interface EnvironmentServiceOptions {
    * host folder (macOS/Windows: avoids the slow host↔VM file sharing).
    */
   cloneIntoVolume?: boolean
+  /**
+   * `--secret` specs for every `up` (create, start, rebuild): the credentials
+   * from Settings › Credentials (credentials/service.ts).
+   */
+  upSecrets?: () => Promise<string[]>
   /** DEVSY_HOME, watched for changes made by other Devsy clients. */
   watchDir?: string
   listIntervalMs?: number
@@ -434,8 +439,13 @@ export class EnvironmentService {
   ): Promise<void> {
     try {
       await this.ensureProvider()
+      const secrets = (await this.opts.upSecrets?.()) ?? []
       const task = await this.opts.client.submitUp({
         ...args,
+        // Every create/start hook runs before the IDE opens, with the
+        // credentials (docs/credentials.md); deferred hooks would get none.
+        waitFor: "postStartCommand",
+        ...(secrets.length > 0 ? { secrets } : {}),
         ide: this.opts.ideOverride ?? r.ide,
         ideLaunch: this.opts.ideLaunch ?? "auto",
         sshConfigPath: this.opts.sshConfigPath,
@@ -596,6 +606,9 @@ export class EnvironmentService {
         await client.initProvider("docker")
       }
       await client.useProvider("docker")
+      // Forward the host's GitHub CLI sign-in into environments (gh there
+      // uses it; Git uses the credential helper forwarding, on by default).
+      await client.setContextOptions({ SSH_INJECT_GITHUB_CREDENTIALS: "true" })
     })().catch((error: unknown) => {
       this.providerReady = undefined
       throw error

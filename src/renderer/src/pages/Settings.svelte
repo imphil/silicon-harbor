@@ -8,6 +8,7 @@ import {
   StructuredListCell,
   StructuredListRow,
 } from "carbon-components-svelte"
+import CredentialsPane from "../lib/components/CredentialsPane.svelte"
 import IdeList from "../lib/components/IdeList.svelte"
 import RequirementsList from "../lib/components/RequirementsList.svelte"
 import SettingsNav from "../lib/components/SettingsNav.svelte"
@@ -82,6 +83,12 @@ async function copyDiagnostics(): Promise<void> {
           Checked every time the app starts.
         </p>
         <RequirementsList showFixAll manageIdeLink />
+      {:else if section === "credentials"}
+        <p class="sh-muted">
+          The sign-ins your environments use. They are kept in your system's
+          password store and given to environments when they start.
+        </p>
+        <CredentialsPane />
       {:else if section === "ide"}
         <p class="sh-muted">
           New environments open in the IDE you use by default. IBM Bob is

@@ -9,18 +9,13 @@ import {
   mergeIcrHelper,
   parseDockerConfig,
 } from "../requirements/docker-config"
-import {
-  GH_LOGIN_SCRIPT,
-  gitCredentialsLinux,
-  gitCredentialsMac,
-  gitCredentialsWindows,
-} from "../requirements/git-credentials"
+import { gitCredentials } from "../requirements/git-credentials"
 import { BOB_DOWNLOAD_URL, ide } from "../requirements/ide"
 import { requirementsFor } from "../requirements/registry"
 import { userBinDir } from "../requirements/user-bin"
 import { parseWslVersion, wsl } from "../requirements/wsl"
 import { xquartz } from "../requirements/xquartz"
-import { FakeHost, fail, fakeContext, notFound, ok } from "./fake-host"
+import { FakeHost, fail, fakeContext, ok } from "./fake-host"
 
 const RD_APP = "/Applications/Rancher Desktop.app"
 const RD_RDCTL = `${RD_APP}/Contents/Resources/resources/darwin/bin/rdctl`
@@ -45,7 +40,6 @@ describe("registry", () => {
       "git-credentials",
       "ide",
     ])
-    // Fedora: Git sign-in through the GitHub CLI instead of GCM.
     expect(ids("linux")).toEqual([
       "container-engine",
       "credential-helper",
@@ -610,94 +604,6 @@ describe("credential helper", () => {
   })
 })
 
-describe("git credentials (macOS)", () => {
-  it("asks Apple's installer for Git when the developer tools are missing", async () => {
-    const host = new FakeHost({
-      platform: "darwin",
-      commands: { "/usr/bin/xcode-select -p": fail("not installed", 2) },
-    })
-    const ctx = fakeContext(host)
-    expect(await gitCredentialsMac.check(ctx)).toMatchObject({
-      state: "missing",
-      fix: { label: "Install Git" },
-    })
-    await gitCredentialsMac.fix?.(ctx)
-    expect(host.runs).toContain("/usr/bin/xcode-select --install")
-    expect(host.elevatedRuns).toEqual([])
-  })
-
-  it("installs and configures GCM", async () => {
-    const host = new FakeHost({
-      platform: "darwin",
-      commands: {
-        "/usr/bin/xcode-select -p": ok("/Library/Developer/CommandLineTools"),
-        "git credential-manager --version": notFound,
-        "git credential-manager configure": ok(),
-      },
-    })
-    const ctx = fakeContext(host)
-    expect(await gitCredentialsMac.check(ctx)).toMatchObject({
-      state: "missing",
-      detail: "Not installed. Signs in to github.ibm.com over HTTPS.",
-      fix: { label: "Install" },
-    })
-    await gitCredentialsMac.fix?.(ctx)
-    expect(ctx.installs.map((i) => i.id)).toEqual(["git-credential-manager"])
-    expect(host.runs).toContain("git credential-manager configure")
-  })
-
-  it("is ok when GCM is installed and Git uses it", async () => {
-    const host = new FakeHost({
-      platform: "darwin",
-      commands: {
-        "/usr/bin/xcode-select -p": ok("/Library/Developer/CommandLineTools"),
-        "git credential-manager --version": ok("2.6.1+abc\n"),
-        "git config --get-all credential.helper": ok(
-          "/usr/local/share/gcm-core/git-credential-manager\n",
-        ),
-      },
-    })
-    expect(await gitCredentialsMac.check(fakeContext(host))).toEqual({
-      id: "git-credentials",
-      title: "Git Credential Manager",
-      state: "ok",
-      version: "2.6.1",
-      detail: "Signs in to github.ibm.com over HTTPS.",
-    })
-  })
-})
-
-describe("git credentials (Windows)", () => {
-  it("installs Git for Windows when Git is missing", async () => {
-    const host = new FakeHost({ platform: "win32" })
-    const ctx = fakeContext(host)
-    expect(await gitCredentialsWindows.check(ctx)).toMatchObject({
-      title: "Git for Windows",
-      state: "missing",
-      detail:
-        "Not installed. Includes Git Credential Manager for github.ibm.com.",
-      fix: { label: "Install" },
-    })
-    await gitCredentialsWindows.fix?.(ctx)
-    expect(ctx.installs.map((i) => i.id)).toEqual(["git-for-windows"])
-  })
-
-  it("is ok with Git for Windows and its GCM", async () => {
-    const host = new FakeHost({
-      platform: "win32",
-      commands: {
-        "git --version": ok("git version 2.56.1.windows.1\n"),
-        "git credential-manager --version": ok("2.6.1"),
-        "git config --get-all credential.helper": ok("manager\n"),
-      },
-    })
-    expect(await gitCredentialsWindows.check(fakeContext(host))).toMatchObject({
-      state: "ok",
-      version: "2.56.1",
-    })
-  })
-})
-
 describe("IDE", () => {
   it("lists the found IDEs with the default first", async () => {
     const host = new FakeHost({
@@ -817,152 +723,255 @@ describe("IDE", () => {
   })
 })
 
-describe("Git sign-in: GitHub CLI (Linux)", () => {
-  const HOSTS = "/home/dev/.config/gh/hosts.yml"
+describe("GitHub CLI sign-in", () => {
   const SIGNED_IN =
     "github.ibm.com:\n    git_protocol: https\n    users:\n        dev:\n    user: dev\n"
   const FEDORA = "NAME=Fedora Linux\nID=fedora\nVERSION_ID=43\n"
-  const GH_HELPER = "\n!/usr/bin/gh auth git-credential\n"
+  const GH_VERSION = ok(
+    "gh version 2.105.0 (2026-11-10)\nhttps://github.com/cli/cli/releases/tag/v2.105.0\n",
+  )
+  const PURPOSE = "Signs Git and the GitHub CLI in to github.ibm.com."
 
-  function linuxHost(
-    opts: {
-      tools?: boolean
-      signedIn?: boolean
-      helper?: boolean
-      rewrite?: string
-      fedora?: boolean
-      env?: NodeJS.ProcessEnv
-    } = {},
-  ) {
-    const { tools = true, signedIn = true, helper = true } = opts
-    const state = { helper }
-    const host = new FakeHost({
-      platform: "linux",
-      env: opts.env,
-      path: tools ? { gh: "/usr/bin/gh", git: "/usr/bin/git" } : {},
-      files: {
-        ...(signedIn ? { [HOSTS]: SIGNED_IN } : {}),
-        ...(opts.fedora === false ? {} : { "/etc/os-release": FEDORA }),
-      },
-      commands: {
-        "gh --version": ok(
-          "gh version 2.83.0 (2026-11-04)\nhttps://github.com/cli/cli/releases/tag/v2.83.0\n",
-        ),
-        "git config --get-all credential.https://github.ibm.com.helper": () =>
-          state.helper ? ok(GH_HELPER) : fail(""),
-        "git config --get-all credential.helper": fail(""),
-        "git config --get-regexp ^url\\..*\\.insteadof$": opts.rewrite
-          ? ok(`${opts.rewrite}\n`)
-          : fail(""),
-        "gh auth setup-git --hostname github.ibm.com": () => {
-          state.helper = true
-          return ok("")
+  describe("Linux", () => {
+    const HOSTS = "/home/dev/.config/gh/hosts.yml"
+    const GH = "/usr/bin/gh"
+
+    function linuxHost(
+      opts: {
+        tools?: boolean
+        signedIn?: boolean
+        helper?: boolean
+        rewrite?: string
+        fedora?: boolean
+        env?: NodeJS.ProcessEnv
+      } = {},
+    ) {
+      const { tools = true, signedIn = true, helper = true } = opts
+      const state = { helper }
+      const host = new FakeHost({
+        platform: "linux",
+        env: opts.env,
+        path: tools ? { gh: GH, git: "/usr/bin/git" } : {},
+        files: {
+          ...(signedIn ? { [HOSTS]: SIGNED_IN } : {}),
+          ...(opts.fedora === false ? {} : { "/etc/os-release": FEDORA }),
         },
-      },
-    })
-    return { host, state }
-  }
-
-  it("is ok when gh is signed in and Git uses it", async () => {
-    const { host } = linuxHost()
-    expect(await gitCredentialsLinux.check(fakeContext(host))).toEqual({
-      id: "git-credentials",
-      title: "GitHub CLI",
-      state: "ok",
-      version: "2.83.0",
-      detail: "Signs Git in to github.ibm.com over HTTPS.",
-    })
-  })
-
-  it("installs gh with dnf, then signs in through a terminal", async () => {
-    const { host, state } = linuxHost({
-      tools: false,
-      signedIn: false,
-      helper: false,
-    })
-    const ctx = fakeContext(host)
-    expect(await gitCredentialsLinux.check(ctx)).toMatchObject({
-      state: "missing",
-      detail:
-        "Not installed (gh, git). Signs Git in to github.ibm.com over HTTPS.",
-      fix: { label: "Install" },
-    })
-    host.elevatedResponses["/bin/sh"] = () => {
-      host.path.gh = "/usr/bin/gh"
-      host.path.git = "/usr/bin/git"
-      return ok("")
+        commands: {
+          [`${GH} --version`]: GH_VERSION,
+          "git config --get-all credential.https://github.ibm.com.helper":
+            () =>
+              state.helper
+                ? ok("\n!/usr/bin/gh auth git-credential\n")
+                : fail(""),
+          "git config --get-all credential.helper": fail(""),
+          "git config --get-regexp ^url\\..*\\.insteadof$": opts.rewrite
+            ? ok(`${opts.rewrite}\n`)
+            : fail(""),
+          [`${GH} auth setup-git --hostname github.ibm.com`]: () => {
+            state.helper = true
+            return ok("")
+          },
+        },
+      })
+      return { host, state }
     }
-    // The user signs in in the terminal: gh writes hosts.yml and sets up Git.
-    host.onTerminal = () => {
-      host.files[HOSTS] = SIGNED_IN
-      state.helper = true
+
+    it("is ok when gh is signed in and Git uses it", async () => {
+      const { host } = linuxHost()
+      expect(await gitCredentials.check(fakeContext(host))).toEqual({
+        id: "git-credentials",
+        title: "GitHub CLI",
+        state: "ok",
+        version: "2.105.0",
+        detail: PURPOSE,
+      })
+    })
+
+    it("installs gh with dnf, then signs in through the browser", async () => {
+      const { host } = linuxHost({ tools: false, signedIn: false })
+      const ctx = fakeContext(host, {
+        onSignIn: (onCode) => {
+          onCode({
+            code: "ABCD-1234",
+            url: "https://github.ibm.com/login/device",
+          })
+          host.files[HOSTS] = SIGNED_IN
+        },
+      })
+      expect(await gitCredentials.check(ctx)).toMatchObject({
+        state: "missing",
+        detail: `Not installed (gh, git). ${PURPOSE}`,
+        fix: { label: "Install" },
+      })
+      host.elevatedResponses["/bin/sh"] = () => {
+        host.path.gh = GH
+        host.path.git = "/usr/bin/git"
+        return ok("")
+      }
+      await gitCredentials.fix?.(ctx)
+      expect(host.elevatedRuns).toEqual(["/bin/sh -c dnf install -y gh git"])
+      expect(ctx.signIns).toBe(1)
+      expect(ctx.progressLog.at(-1)).toBe(
+        "Enter the code ABCD-1234 on the page that opened in your browser (it is on your clipboard).",
+      )
+      expect((await gitCredentials.check(ctx)).state).toBe("ok")
+    })
+
+    it("asks for a sign-in", async () => {
+      const { host } = linuxHost({ signedIn: false })
+      const ctx = fakeContext(host)
+      expect(await gitCredentials.check(ctx)).toMatchObject({
+        state: "warn",
+        version: "2.105.0",
+        detail: "Not signed in to github.ibm.com yet.",
+        fix: { label: "Sign in" },
+      })
+      await gitCredentials.fix?.(ctx)
+      expect(ctx.signIns).toBe(1)
+      expect((await gitCredentials.check(ctx)).state).toBe("warn")
+    })
+
+    it("sets Git up to use gh when only that is missing", async () => {
+      const { host } = linuxHost({ helper: false })
+      const ctx = fakeContext(host)
+      expect(await gitCredentials.check(ctx)).toMatchObject({
+        state: "warn",
+        fix: { label: "Set up" },
+      })
+      await gitCredentials.fix?.(ctx)
+      expect(host.runs).toContain(
+        `${GH} auth setup-git --hostname github.ibm.com`,
+      )
+      expect(ctx.signIns).toBe(0)
+      expect((await gitCredentials.check(ctx)).state).toBe("ok")
+    })
+
+    it("warns about an insteadOf rule that rewrites HTTPS, without a fix", async () => {
+      const { host } = linuxHost({
+        rewrite: "url.git@github.ibm.com:.insteadof https://github.ibm.com/",
+      })
+      const status = await gitCredentials.check(fakeContext(host))
+      expect(status).toMatchObject({ state: "warn" })
+      expect(status.detail).toContain(
+        "(url.git@github.ibm.com:.insteadof = https://github.ibm.com/)",
+      )
+      expect(status.fix).toBeUndefined()
+    })
+
+    it("only offers the install on Fedora", async () => {
+      const { host } = linuxHost({ tools: false, fedora: false })
+      const status = await gitCredentials.check(fakeContext(host))
+      expect(status).toMatchObject({ state: "missing" })
+      expect(status.fix).toBeUndefined()
+    })
+
+    it("honours GH_CONFIG_DIR", async () => {
+      const { host } = linuxHost({
+        signedIn: false,
+        env: { GH_CONFIG_DIR: "/cfg/gh" },
+      })
+      host.files["/cfg/gh/hosts.yml"] = SIGNED_IN
+      expect((await gitCredentials.check(fakeContext(host))).state).toBe("ok")
+    })
+  })
+
+  describe("macOS", () => {
+    it("asks Apple's installer for Git when the developer tools are missing", async () => {
+      const host = new FakeHost({
+        platform: "darwin",
+        commands: { "/usr/bin/xcode-select -p": fail("not installed", 2) },
+      })
+      const ctx = fakeContext(host)
+      expect(await gitCredentials.check(ctx)).toMatchObject({
+        state: "missing",
+        fix: { label: "Install Git" },
+      })
+      await gitCredentials.fix?.(ctx)
+      expect(host.runs).toContain("/usr/bin/xcode-select --install")
+      expect(ctx.installs).toEqual([])
+      expect(ctx.signIns).toBe(0)
+    })
+
+    it("installs the pinned gh package, then signs in", async () => {
+      const host = new FakeHost({
+        platform: "darwin",
+        commands: {
+          "/usr/bin/xcode-select -p": ok("/Library/Developer/CommandLineTools"),
+          "/usr/local/bin/gh --version": GH_VERSION,
+        },
+      })
+      const ctx = fakeContext(host, {
+        // The pkg puts gh into /usr/local/bin, not on the app's PATH yet.
+        onInstall: () => {
+          host.files["/usr/local/bin/gh"] = ""
+        },
+      })
+      expect(await gitCredentials.check(ctx)).toMatchObject({
+        title: "GitHub CLI",
+        state: "missing",
+        detail: `Not installed. ${PURPOSE}`,
+        fix: { label: "Install" },
+      })
+      await gitCredentials.fix?.(ctx)
+      expect(ctx.installs.map((i) => i.id)).toEqual(["gh"])
+      expect(ctx.signIns).toBe(1)
+    })
+  })
+
+  describe("Windows", () => {
+    const GH = "C:\\Program Files\\GitHub CLI\\gh.exe"
+    const HOSTS = "C:\\Users\\dev\\AppData\\Roaming\\GitHub CLI\\hosts.yml"
+    const env = {
+      ProgramFiles: "C:\\Program Files",
+      APPDATA: "C:\\Users\\dev\\AppData\\Roaming",
     }
-    await gitCredentialsLinux.fix?.(ctx)
-    expect(host.elevatedRuns).toEqual(["/bin/sh -c dnf install -y gh git"])
-    expect(host.terminals).toEqual([["sh", "-c", GH_LOGIN_SCRIPT]])
-    expect(GH_LOGIN_SCRIPT).toContain(
-      "gh auth login --hostname github.ibm.com --git-protocol https --web",
-    )
-    expect(ctx.progressLog.at(-1)).toBe(
-      "Sign in to github.ibm.com in the terminal window that opened…",
-    )
-    expect((await gitCredentialsLinux.check(ctx)).state).toBe("ok")
-  })
 
-  it("asks for a sign-in and gives up waiting after a while", async () => {
-    const { host } = linuxHost({ signedIn: false })
-    const ctx = fakeContext(host)
-    expect(await gitCredentialsLinux.check(ctx)).toMatchObject({
-      state: "warn",
-      version: "2.83.0",
-      detail: "Not signed in to github.ibm.com yet.",
-      fix: { label: "Sign in" },
+    it("installs Git for Windows when Git is missing", async () => {
+      const host = new FakeHost({ platform: "win32", env })
+      const ctx = fakeContext(host)
+      expect(await gitCredentials.check(ctx)).toMatchObject({
+        state: "missing",
+        detail: "Git is not installed. Git for Windows adds it.",
+        fix: { label: "Install Git" },
+      })
+      await gitCredentials.fix?.(ctx)
+      expect(ctx.installs.map((i) => i.id)).toContain("git-for-windows")
     })
-    await gitCredentialsLinux.fix?.(ctx)
-    expect(host.terminals).toHaveLength(1)
-    expect((await gitCredentialsLinux.check(ctx)).state).toBe("warn")
-  })
 
-  it("sets Git up to use gh when only that is missing", async () => {
-    const { host } = linuxHost({ helper: false })
-    const ctx = fakeContext(host)
-    expect(await gitCredentialsLinux.check(ctx)).toMatchObject({
-      state: "warn",
-      fix: { label: "Set up" },
+    it("finds a freshly installed gh in Program Files and its sign-in in AppData", async () => {
+      const host = new FakeHost({
+        platform: "win32",
+        env,
+        files: { [GH]: "", [HOSTS]: SIGNED_IN },
+        commands: {
+          "git --version": ok("git version 2.56.1.windows.1\n"),
+          [`${GH} --version`]: GH_VERSION,
+          "git config --get-all credential.https://github.ibm.com.helper": ok(
+            "\n!'C:\\Program Files\\GitHub CLI\\gh.exe' auth git-credential\n",
+          ),
+          "git config --get-regexp ^url\\..*\\.insteadof$": fail(""),
+        },
+      })
+      expect(await gitCredentials.check(fakeContext(host))).toMatchObject({
+        state: "ok",
+        version: "2.105.0",
+      })
     })
-    await gitCredentialsLinux.fix?.(ctx)
-    expect(host.runs).toContain("gh auth setup-git --hostname github.ibm.com")
-    expect(host.terminals).toEqual([])
-    expect((await gitCredentialsLinux.check(ctx)).state).toBe("ok")
-  })
 
-  it("warns about an insteadOf rule that rewrites HTTPS, without a fix", async () => {
-    const { host } = linuxHost({
-      rewrite: "url.git@github.ibm.com:.insteadof https://github.ibm.com/",
+    it("installs the pinned gh MSI when gh is missing", async () => {
+      const host = new FakeHost({
+        platform: "win32",
+        env,
+        commands: { "git --version": ok("git version 2.56.1.windows.1\n") },
+      })
+      const ctx = fakeContext(host, {
+        onInstall: () => {
+          host.files[GH] = ""
+        },
+      })
+      await gitCredentials.fix?.(ctx)
+      expect(ctx.installs.map((i) => i.id)).toEqual(["gh"])
+      expect(ctx.signIns).toBe(1)
     })
-    const status = await gitCredentialsLinux.check(fakeContext(host))
-    expect(status).toMatchObject({ state: "warn" })
-    expect(status.detail).toContain(
-      "(url.git@github.ibm.com:.insteadof = https://github.ibm.com/)",
-    )
-    expect(status.fix).toBeUndefined()
-  })
-
-  it("only offers the install on Fedora", async () => {
-    const { host } = linuxHost({ tools: false, fedora: false })
-    const status = await gitCredentialsLinux.check(fakeContext(host))
-    expect(status).toMatchObject({ state: "missing" })
-    expect(status.fix).toBeUndefined()
-  })
-
-  it("honours GH_CONFIG_DIR", async () => {
-    const { host } = linuxHost({
-      signedIn: false,
-      env: { GH_CONFIG_DIR: "/cfg/gh" },
-    })
-    host.files["/cfg/gh/hosts.yml"] = SIGNED_IN
-    expect((await gitCredentialsLinux.check(fakeContext(host))).state).toBe(
-      "ok",
-    )
   })
 })

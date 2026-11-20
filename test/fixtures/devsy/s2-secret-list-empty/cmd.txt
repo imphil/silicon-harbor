@@ -1,0 +1,2 @@
+devsy secret list --log-level info --log-output json --result-format json
+# duration-ms: 64

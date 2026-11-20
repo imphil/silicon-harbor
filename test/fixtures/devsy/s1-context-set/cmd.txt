@@ -1,0 +1,2 @@
+devsy context set -o SSH_INJECT_GITHUB_CREDENTIALS=true --log-level info --log-output json --result-format json
+# duration-ms: 92

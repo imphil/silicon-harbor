@@ -19,7 +19,7 @@ Paste a Git URL → get a working environment open in your IDE. No container kno
 | Provider                | Docker, local only. Remote machines later (SSH or custom provider, TBD)                                                                                                                                                                                                                                                                                                           |
 | Environment definition  | Repos ship a complete `devcontainer.json` (incl. X11). No fallback image, no extra mounts                                                                                                                                                                                                                                                                                         |
 | Source location         | macOS/Windows: cloned into a Docker volume (`--clone-into-volume`, our Devsy fork), no host copy. Fedora: host folder bind-mounted                                                                                                                                                                                                                                                |
-| Git auth                | HTTPS only. macOS/Windows: via Git Credential Manager (GCM), checked and installed by us. Fedora: the GitHub CLI (`gh auth login` + `gh auth setup-git`), checked and installed by us                                                                                                                                                                                             |
+| Git auth                | HTTPS only. The GitHub CLI on every platform (`gh auth login --web` + `gh auth setup-git`), checked and installed by us; its sign-in is forwarded into environments for Git and gh (Settings › Credentials, docs/credentials.md)                                                                                                                                                  |
 | Registry auth           | `docker-credential-icr` for `icr.io` (works on macOS, Windows, Linux)                                                                                                                                                                                                                                                                                                             |
 | IDEs                    | VS Code, IBM Bob, VSCodium — Devsy installs open-remote-ssh into the IDE                                                                                                                                                                                                                                                                                                          |
 | Platforms               | macOS, Windows, Fedora (only Linux target)                                                                                                                                                                                                                                                                                                                                        |
@@ -27,7 +27,7 @@ Paste a Git URL → get a working environment open in your IDE. No container kno
 | Build                   | Linux-only CI; electron-builder cross-packages all targets                                                                                                                                                                                                                                                                                                                        |
 | Signing                 | None for now. macOS: ad-hoc signature (`rcodesign`) so it runs on Apple silicon. Windows: unsigned (SmartScreen warning accepted for beta)                                                                                                                                                                                                                                        |
 | Distribution            | Releases in a **private** repo on github.ibm.com. First install: user downloads in the browser                                                                                                                                                                                                                                                                                    |
-| Updates                 | Update check authenticates with the user's github.ibm.com credential from their git credential helper (`git credential fill`; GCM on macOS/Windows). Windows/Fedora: in-app update. macOS: "update available → download" until properly signed                                                                                                                                    |
+| Updates                 | Update check authenticates with the user's github.ibm.com credential from their git credential helper (`git credential fill`; answered by the GitHub CLI). Windows/Fedora: in-app update. macOS: "update available → download" until properly signed                                                                                                                              |
 | Installs                | Users have admin rights. Vendor downloads only for now: checksum-verified, normal OS elevation prompt. IBM software catalog: not integrated (possible later)                                                                                                                                                                                                                      |
 | Fedora container engine | Fedora's `moby-engine` package, rootful, user in `docker` group                                                                                                                                                                                                                                                                                                                   |
 
@@ -55,6 +55,7 @@ Environments (home)
                                             tabs: Overview · Log
 Settings  /settings/:section
   ├─ This computer   (requirements check — same component as first-run Setup)
+  ├─ Credentials     (GitHub CLI sign-in, Artifactory token; docs/credentials.md)
   ├─ IDE             (default IDE)
   ├─ Updates
   └─ Support         (diagnostics bundle, log folder)
@@ -285,7 +286,7 @@ documented; all spikes green or with a written workaround.
 - Packaging from Linux (`docs/spikes/packaging.md`): macOS zip x64 + arm64 ad-hoc signed with rcodesign ✔, Fedora RPM ✔,
   Windows zip ✔. Windows NSIS installer ✔ in CI (electron-builder runs in the
   `electronuserland/builder` Wine image). CI: GitHub Actions on `imphil/silicon-harbor`, all targets on ubuntu-24.04.
-- Devsy binaries pinned and fetched with sha256 check by `scripts/fetch-devsy.mjs`. Source: our fork `imphil/devsy` v1.27.1-phw.6 (was upstream v1.27.1), checksums from the release's asset digests. (phw.1 has no binaries: its macOS build never got a runner.) Its CLI fetches the in-container agent from the fork's release too (`config.releaseRepo`).
+- Devsy binaries pinned and fetched with sha256 check by `scripts/fetch-devsy.mjs`. Source: our fork `imphil/devsy` v1.27.1-phw.7 (was upstream v1.27.1), checksums from the release's asset digests. (phw.1 has no binaries: its macOS build never got a runner.) Its CLI fetches the in-container agent from the fork's release too (`config.releaseRepo`).
 - Remaining M0: first manual install on the macOS and Windows test machines; real-world spikes
   (github.ibm.com repo + icr.io + IDEs + X11) on those machines; app icons.
 
@@ -314,6 +315,9 @@ documented; all spikes green or with a written workaround.
 - Verified here: unit tests with fakes for all three platforms; read-only checks on this Linux machine (Docker ok,
   credential helper missing, VS Code found). Not verified: any real fix/installer — needs the macOS, Windows and
   Fedora test machines.
+- 2026-11-20: Git sign-in switched to the GitHub CLI on all platforms (GCM dropped; pinned gh 2.105.0 pkg/MSI),
+  plus Settings › Credentials (GitHub account check, browser sign-in with the one-time code shown in the app,
+  Artifactory token in Devsy's secret store, mounted at `/run/secrets` on every `up`). See docs/credentials.md.
 - docker-credential-icr installs into a directory on the user's own PATH (macOS `/usr/local/bin` with admin prompt, Fedora `~/.local/bin`, Windows per-user folder added to the user PATH), so the shared `credHelpers` entry also works in the user's own terminal; that directory is also prepended to the Devsy CLI's PATH.
 
 ### M1 — Engine integration (weeks 3–4, Track A)

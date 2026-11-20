@@ -7,6 +7,8 @@ import {
   type ParsedLine,
   ProviderListSchema,
   parseLine,
+  type SecretEntry,
+  SecretListSchema,
   type SetupLogRead,
   SetupLogReadSchema,
   type TaskEnvelope,
@@ -114,6 +116,21 @@ export interface UpArgs {
    * an existing workspace.
    */
   cloneIntoVolume?: boolean
+  /**
+   * --secret specs, e.g. `SH_ARTIFACTORY_TOKEN,type=mount,target=ARTIFACTORY_TOKEN`.
+   * Only names: Devsy reads the values from its secret store.
+   */
+  secrets?: string[]
+  /**
+   * --wait-for (our Devsy fork): run the lifecycle hooks up to this one
+   * before `up` returns, while the forwarded Git and GitHub CLI credentials
+   * are reachable.
+   */
+  waitFor?:
+    | "onCreateCommand"
+    | "updateContentCommand"
+    | "postCreateCommand"
+    | "postStartCommand"
 }
 
 export interface FollowCallbacks {
@@ -169,6 +186,8 @@ export class DevsyClient {
     if (args.recreate) cliArgs.push("--recreate")
     if (args.sshConfigPath) cliArgs.push("--ssh-config", args.sshConfigPath)
     if (args.cloneIntoVolume) cliArgs.push("--clone-into-volume")
+    for (const secret of args.secrets ?? []) cliArgs.push("--secret", secret)
+    if (args.waitFor) cliArgs.push("--wait-for", args.waitFor)
     cliArgs.push("--detach")
     return parseJson(await this.run(cliArgs, 60_000), TaskEnvelopeSchema)
   }
@@ -219,6 +238,46 @@ export class DevsyClient {
     const args = ["workspace", "logs", id, "--source", "setup", "--run", runId]
     if (after) args.push("--after", after)
     return parseJson(await this.run(args, 30_000), SetupLogReadSchema)
+  }
+
+  /** Secrets stored in the active context (names and availability, no values). */
+  async listSecrets(): Promise<SecretEntry[]> {
+    return parseJson(
+      await this.run(["secret", "list"], 30_000),
+      SecretListSchema,
+    )
+  }
+
+  /** A secret's value. Never logged: only the caller sees it. */
+  async getSecret(name: string): Promise<string> {
+    const result = await this.cli.exec(["secret", "get", name], {
+      timeoutMs: 30_000,
+    })
+    if (result.code !== 0)
+      throw errorFromResult(result, `Could not read secret ${name}`)
+    return result.stdout.replace(/\r?\n$/, "")
+  }
+
+  /** Stores a secret; the value goes through stdin, never the command line. */
+  async setSecret(name: string, value: string): Promise<void> {
+    const result = await this.cli.exec(["secret", "set", name, "--stdin"], {
+      timeoutMs: 30_000,
+      input: `${value}\n`,
+    })
+    if (result.code !== 0)
+      throw errorFromResult(result, `Could not store secret ${name}`)
+  }
+
+  async deleteSecret(name: string): Promise<void> {
+    await this.run(["secret", "delete", name], 30_000)
+  }
+
+  /** `context set -o KEY=VALUE` on the active context. */
+  async setContextOptions(options: Record<string, string>): Promise<void> {
+    const args = ["context", "set"]
+    for (const [key, value] of Object.entries(options))
+      args.push("-o", `${key}=${value}`)
+    await this.run(args, 30_000)
   }
 
   async providerNames(): Promise<string[]> {

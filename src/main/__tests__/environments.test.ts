@@ -79,6 +79,7 @@ function baseScript(): Script {
   return new Script()
     .set("provider list", "provider-list")
     .set("provider use", "provider-use-docker")
+    .set("context set", "s1-context-set")
     .set("workspace task list", inline("[]"))
     .set("workspace list", "d4-list-after-delete")
     .set("workspace logs", "l2-setup-logs-read")
@@ -115,6 +116,8 @@ describe("EnvironmentService", () => {
       "bob",
       "--ide-launch",
       "auto",
+      "--wait-for",
+      "postStartCommand",
       "--detach",
     ])
     // Progress was visible on the way.
@@ -261,6 +264,32 @@ describe("EnvironmentService", () => {
     )
     expect(ups()[0]).toContain("--clone-into-volume")
     expect(ups()[1]).toContain("--clone-into-volume")
+  })
+
+  it("turns on GitHub CLI forwarding, passes the stored secrets and waits for the hooks", async () => {
+    const script = baseScript()
+      .set("workspace up", "i1-clone-fail-submit")
+      .set("workspace task logs", "i2-clone-fail-logs")
+    const { cli, service, env, until } = setup(script, {
+      upSecrets: async () => [
+        "SH_ARTIFACTORY_TOKEN,type=mount,target=ARTIFACTORY_TOKEN",
+      ],
+    })
+    const { id } = await service.create({ repoUrl: REPO })
+    await until(() => env(id)?.state === "failed", "failed")
+    expect(cli.calls).toContainEqual([
+      "context",
+      "set",
+      "-o",
+      "SSH_INJECT_GITHUB_CREDENTIALS=true",
+    ])
+    const up = cli.calls.find((c) => c[1] === "up") ?? []
+    const at = up.indexOf("--secret")
+    expect(up[at + 1]).toBe(
+      "SH_ARTIFACTORY_TOKEN,type=mount,target=ARTIFACTORY_TOKEN",
+    )
+    // All create/start hooks run while the credentials are reachable.
+    expect(up[up.indexOf("--wait-for") + 1]).toBe("postStartCommand")
   })
 
   it("does not ask for a volume clone for an existing workspace", async () => {

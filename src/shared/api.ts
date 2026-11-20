@@ -165,6 +165,65 @@ export interface IdeStatus {
 }
 
 // ---------------------------------------------------------------------------
+// Credentials (Settings › Credentials)
+
+export interface GitHubAccount {
+  login: string
+  name?: string
+  email?: string
+}
+
+/** The GitHub CLI sign-in for github.ibm.com, forwarded into environments. */
+export interface GitHubCredential {
+  /** e.g. "github.ibm.com" */
+  host: string
+  state:
+    | "ok"
+    /** gh is not installed (see "This computer"). */
+    | "no-cli"
+    | "signed-out"
+    /** Stored, but the host rejects it. */
+    | "invalid"
+    /** Could not be checked (offline, host unreachable). */
+    | "unknown"
+  detail: string
+  account?: GitHubAccount
+  /** OAuth scopes of the token, e.g. ["gist", "read:org", "repo"]. */
+  scopes?: string[]
+  /** While a browser sign-in waits: the one-time code and the page to enter it on. */
+  signIn?: { code?: string; url?: string }
+}
+
+/** The Artifactory identity token, mounted into environments. */
+export interface ArtifactoryCredential {
+  /** The Artifactory web page, e.g. "https://eu.artifactory.swg-devops.com/". */
+  url: string
+  state:
+    | "ok"
+    /** No token stored. */
+    | "missing"
+    /** Stored, but Artifactory rejects it. */
+    | "invalid"
+    /** Could not be checked (offline, Artifactory down, secret store locked). */
+    | "unknown"
+  detail: string
+  /** The w3id (IBM email address) the token belongs to. */
+  user?: string
+}
+
+export interface CredentialsStatus {
+  github: GitHubCredential
+  artifactory: ArtifactoryCredential
+}
+
+export interface SaveArtifactoryRequest {
+  /** w3id (IBM email address). */
+  user: string
+  /** Empty keeps the stored token (only the w3id changes). */
+  token: string
+}
+
+// ---------------------------------------------------------------------------
 // Settings
 
 export interface Settings {
@@ -204,6 +263,17 @@ export interface SiliconHarborApi {
   checkRequirements(): Promise<RequirementStatus[]>
   fixRequirement(id: RequirementId): Promise<void>
 
+  /** Last known status (checks once on first call). */
+  getCredentials(): Promise<CredentialsStatus>
+  /** Checks again: asks github.ibm.com and Artifactory whether the sign-ins work. */
+  checkCredentials(): Promise<CredentialsStatus>
+  /** Starts the GitHub CLI browser sign-in; resolves when it finished or failed. */
+  signInGitHub(): Promise<void>
+  cancelGitHubSignIn(): Promise<void>
+  /** Stores the w3id and token in Devsy's secret store and checks the token. */
+  saveArtifactoryToken(req: SaveArtifactoryRequest): Promise<CredentialsStatus>
+  removeArtifactoryToken(): Promise<CredentialsStatus>
+
   getSettings(): Promise<Settings>
   updateSettings(patch: Partial<Settings>): Promise<Settings>
 
@@ -212,6 +282,7 @@ export interface SiliconHarborApi {
   /** Live log lines for one environment. */
   onLog(id: string, cb: (line: LogLine) => void): Unsubscribe
   onRequirementsChanged(cb: (reqs: RequirementStatus[]) => void): Unsubscribe
+  onCredentialsChanged(cb: (status: CredentialsStatus) => void): Unsubscribe
 }
 
 export const IpcChannel = {
@@ -230,10 +301,17 @@ export const IpcChannel = {
   diagnosticsCopy: "diagnostics:copy",
   reqCheck: "req:check",
   reqFix: "req:fix",
+  credGet: "cred:get",
+  credCheck: "cred:check",
+  credGitHubSignIn: "cred:github-sign-in",
+  credGitHubCancel: "cred:github-cancel",
+  credArtifactorySave: "cred:artifactory-save",
+  credArtifactoryRemove: "cred:artifactory-remove",
   settingsGet: "settings:get",
   settingsUpdate: "settings:update",
   // main → renderer events
   evtEnvironments: "evt:environments",
   evtLog: "evt:log",
   evtRequirements: "evt:requirements",
+  evtCredentials: "evt:credentials",
 } as const

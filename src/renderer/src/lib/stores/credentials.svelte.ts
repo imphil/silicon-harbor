@@ -1,0 +1,82 @@
+import type {
+  CredentialsStatus,
+  SaveArtifactoryRequest,
+  SiliconHarborApi,
+} from "$shared/api"
+import { attempt } from "./notifications.svelte"
+
+/** Settings › Credentials: the GitHub CLI sign-in and the Artifactory token. */
+export class CredentialStore {
+  status = $state<CredentialsStatus | null>(null)
+  checking = $state(false)
+  saving = $state(false)
+  loadError = $state("")
+  private unsubscribe?: () => void
+
+  /** A browser sign-in is waiting (its code may not be known yet). */
+  signingIn = $derived(this.status?.github.signIn !== undefined)
+
+  constructor(private readonly api: () => SiliconHarborApi) {}
+
+  async init(): Promise<void> {
+    if (this.unsubscribe) return
+    this.unsubscribe = this.api().onCredentialsChanged((status) => {
+      this.status = status
+    })
+    await this.load(() => this.api().getCredentials())
+  }
+
+  dispose(): void {
+    this.unsubscribe?.()
+    this.unsubscribe = undefined
+  }
+
+  check(): Promise<void> {
+    return this.load(() => this.api().checkCredentials())
+  }
+
+  private async load(fn: () => Promise<CredentialsStatus>): Promise<void> {
+    this.checking = true
+    try {
+      this.status = await fn()
+      this.loadError = ""
+    } catch (error) {
+      this.loadError = error instanceof Error ? error.message : String(error)
+    } finally {
+      this.checking = false
+    }
+  }
+
+  signInGitHub() {
+    return attempt("Could not sign in to GitHub", () =>
+      this.api().signInGitHub(),
+    )
+  }
+
+  cancelGitHubSignIn() {
+    return attempt("Could not cancel the sign-in", () =>
+      this.api().cancelGitHubSignIn(),
+    )
+  }
+
+  /** True when saved (errors are shown as a notification). */
+  async saveArtifactory(req: SaveArtifactoryRequest): Promise<boolean> {
+    this.saving = true
+    try {
+      const status = await attempt("Could not save the token", () =>
+        this.api().saveArtifactoryToken(req),
+      )
+      if (status) this.status = status
+      return status !== undefined
+    } finally {
+      this.saving = false
+    }
+  }
+
+  async removeArtifactory(): Promise<void> {
+    const status = await attempt("Could not remove the token", () =>
+      this.api().removeArtifactoryToken(),
+    )
+    if (status) this.status = status
+  }
+}

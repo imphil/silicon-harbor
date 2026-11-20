@@ -22,6 +22,10 @@ if (cmd === "echo") {
   console.error('{"level":"error","msg":"bad"}')
   console.log("\\u001b[31mred\\u001b[0m")
   process.exit(3)
+} else if (cmd === "stdin") {
+  let input = ""
+  process.stdin.on("data", (d) => (input += d))
+  process.stdin.on("end", () => console.log(JSON.stringify({ input })))
 } else if (cmd === "sleep") {
   console.log("started")
   setTimeout(() => {}, 60000)
@@ -35,6 +39,11 @@ const runner = new CliRunner({
 })
 
 describe("CliRunner", () => {
+  it("writes input to stdin and closes it, keeping it off the command line", async () => {
+    const result = await runner.exec(["stdin"], { input: "s3cret\n" })
+    expect(JSON.parse(result.stdout)).toEqual({ input: "s3cret\n" })
+  })
+
   it("appends the protocol flags and passes only the given environment", async () => {
     process.env.SECRET = "do-not-leak"
     const result = await runner.exec(["echo"])

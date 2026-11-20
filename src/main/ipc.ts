@@ -6,6 +6,7 @@ import {
   type RequirementStatus,
   type Settings,
 } from "../shared/api"
+import type { CredentialService } from "./credentials/service"
 import type { DevsyClient } from "./devsy/client"
 import { WORKSPACE_ID_PATTERN } from "./devsy/ids"
 import { buildDiagnostics } from "./diagnostics"
@@ -31,6 +32,15 @@ export interface IpcDeps {
   devsyHome: string
   writeClipboard(text: string): void
   requirements: Pick<RequirementService, "check" | "fix">
+  credentials?: Pick<
+    CredentialService,
+    | "get"
+    | "check"
+    | "signInGitHub"
+    | "cancelGitHubSignIn"
+    | "saveArtifactory"
+    | "removeArtifactory"
+  >
   /** The last lines of the setup log (requirement checks and fixes). */
   setupLog?(lines: number): string[]
 }
@@ -47,6 +57,12 @@ const RequirementIdSchema = z.enum([
 ])
 
 const IdSchema = z.string().regex(WORKSPACE_ID_PATTERN)
+const SaveArtifactorySchema = z
+  .object({
+    user: z.string().max(254),
+    token: z.string().max(8192),
+  })
+  .strict()
 const CreateSchema = z
   .object({
     repoUrl: z.string().min(1).max(2048),
@@ -127,6 +143,19 @@ export function registerIpc(deps: IpcDeps): void {
   on(IpcChannel.reqFix, (id) =>
     deps.requirements.fix(RequirementIdSchema.parse(id)),
   )
+
+  const credentials = () => {
+    if (!deps.credentials) throw new Error("Credentials are not available")
+    return deps.credentials
+  }
+  on(IpcChannel.credGet, () => credentials().get())
+  on(IpcChannel.credCheck, () => credentials().check())
+  on(IpcChannel.credGitHubSignIn, () => credentials().signInGitHub())
+  on(IpcChannel.credGitHubCancel, () => credentials().cancelGitHubSignIn())
+  on(IpcChannel.credArtifactorySave, (req) =>
+    credentials().saveArtifactory(SaveArtifactorySchema.parse(req)),
+  )
+  on(IpcChannel.credArtifactoryRemove, () => credentials().removeArtifactory())
 
   on(IpcChannel.settingsGet, (): Settings => deps.settings.get())
   on(IpcChannel.settingsUpdate, (patch) => deps.settings.update(patch))

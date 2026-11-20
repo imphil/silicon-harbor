@@ -28,6 +28,8 @@ export interface ExecOptions {
   protocolFlags?: boolean
   /** Kill the process after this many milliseconds. */
   timeoutMs?: number
+  /** Written to stdin, which is then closed (e.g. a secret for `secret set --stdin`). */
+  input?: string
 }
 
 export interface StreamHandle {
@@ -121,6 +123,11 @@ export class CliRunner implements DevsyCli {
       { env: this.options.env, windowsHide: true },
     )
     this.children.add(child)
+    if (options.input !== undefined) {
+      // A failed write (the process exited early) surfaces as its exit code.
+      child.stdin?.on("error", () => {})
+      child.stdin?.end(options.input)
+    }
 
     let killTimer: ReturnType<typeof setTimeout> | undefined
     const cancel = () => {

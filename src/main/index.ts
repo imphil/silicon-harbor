@@ -3,6 +3,8 @@ import { homedir, uptime, userInfo } from "node:os"
 import { join } from "node:path"
 import { app, BrowserWindow, clipboard, ipcMain, shell } from "electron"
 import { type AppInfo, IpcChannel } from "../shared/api.js"
+import { type DeviceCode, GitHubSignIn } from "./credentials/github.js"
+import { CredentialService } from "./credentials/service.js"
 import { DevsyClient } from "./devsy/client.js"
 import {
   buildCliEnv,
@@ -30,6 +32,7 @@ if (process.env.SH_USER_DATA_DIR) {
 let mainWindow: BrowserWindow | null = null
 let runner: CliRunner | null = null
 let environments: EnvironmentService | null = null
+let gitHubSignInForQuit: GitHubSignIn | null = null
 
 function broadcast(channel: string, payload: unknown): void {
   for (const window of BrowserWindow.getAllWindows()) {
@@ -61,6 +64,39 @@ function startBackend(): void {
     join(app.getPath("userData"), "settings.json"),
   )
   const logs = new LogStore(join(app.getPath("userData"), "logs"))
+  const setupLog = new SetupLog(
+    join(app.getPath("userData"), "logs", "setup.log"),
+  )
+  const host = new NodeHost({
+    log: (entry) => setupLog.write(entry),
+    homeDir: homedir(),
+    userName: currentUserName(),
+    // GUI apps on macOS get a minimal PATH; find Homebrew/Rancher tools.
+    env: {
+      ...process.env,
+      PATH: executableSearchPath(
+        process.env.PATH ?? "",
+        process.platform,
+        homedir(),
+      ),
+    },
+    openExternal: (url) => shell.openExternal(url),
+  })
+  // Set once the services below exist: they show and re-check the sign-in.
+  let onSignInChange = () => {}
+  const gitHubSignIn = new GitHubSignIn({
+    host,
+    writeClipboard: (text) => clipboard.writeText(text),
+    onChange: () => onSignInChange(),
+  })
+  gitHubSignInForQuit = gitHubSignIn
+  const credentials = new CredentialService({
+    host,
+    secrets: client,
+    signIn: gitHubSignIn,
+    log: (entry) => setupLog.write(entry),
+    onChange: (status) => broadcast(IpcChannel.evtCredentials, status),
+  })
   environments = new EnvironmentService({
     client,
     logs,
@@ -69,40 +105,29 @@ function startBackend(): void {
     // Docker runs in a VM on macOS and Windows; a bind-mounted source is
     // slow there. On Linux the host folder is native and stays visible.
     cloneIntoVolume: cloneIntoVolumeFor(process.platform),
+    upSecrets: () => credentials.upSecretFlags(),
     onChange: (envs) => broadcast(IpcChannel.evtEnvironments, envs),
     onLog: (id, line) => broadcast(IpcChannel.evtLog, { id, line }),
   })
-  const setupLog = new SetupLog(
-    join(app.getPath("userData"), "logs", "setup.log"),
-  )
   setupLog.write(
     `Silicon Harbor ${info.appVersion} started (${process.platform} ${process.arch})`,
   )
   const requirements = new RequirementService({
     log: (entry) => setupLog.write(entry),
-    host: new NodeHost({
-      log: (entry) => setupLog.write(entry),
-      homeDir: homedir(),
-      userName: currentUserName(),
-      // GUI apps on macOS get a minimal PATH; find Homebrew/Rancher tools.
-      env: {
-        ...process.env,
-        PATH: executableSearchPath(
-          process.env.PATH ?? "",
-          process.platform,
-          homedir(),
-        ),
-      },
-      openExternal: (url) => shell.openExternal(url),
-    }),
+    host,
     manifest: loadManifest(),
     binDir,
     settings: () => settings.get(),
     updateSettings: (patch) => settings.update(patch),
     pendingFile: join(app.getPath("userData"), "requirements-pending.json"),
+    signInGitHub: (onCode) => signInWithCode(gitHubSignIn, onCode),
     bootTime: () => Date.now() - uptime() * 1000,
     onChange: (list) => broadcast(IpcChannel.evtRequirements, list),
   })
+  onSignInChange = () => {
+    credentials.signInChanged()
+    if (!gitHubSignIn.active) void requirements.check()
+  }
   registerIpc({
     ipcMain,
     appInfo,
@@ -112,10 +137,31 @@ function startBackend(): void {
     devsyHome,
     writeClipboard: (text) => clipboard.writeText(text),
     requirements,
+    credentials,
     setupLog: (lines) => setupLog.tail(lines),
   })
   void environments.start()
   void requirements.check()
+}
+
+/** Runs the shared GitHub sign-in, reporting its one-time code once known. */
+async function signInWithCode(
+  signIn: GitHubSignIn,
+  onCode: (code: DeviceCode) => void,
+): Promise<void> {
+  let shown = ""
+  const timer = setInterval(() => {
+    const pending = signIn.pending
+    if (pending && pending.code !== shown) {
+      shown = pending.code
+      onCode(pending)
+    }
+  }, 250)
+  try {
+    await signIn.run()
+  } finally {
+    clearInterval(timer)
+  }
 }
 
 function cloneIntoVolumeFor(platform: NodeJS.Platform): boolean {
@@ -204,6 +250,7 @@ if (!app.requestSingleInstanceLock()) {
 
   // Detached Devsy tasks keep running; only our followers and polls stop.
   app.on("will-quit", () => {
+    gitHubSignInForQuit?.cancel()
     environments?.stop()
     runner?.killAll()
   })

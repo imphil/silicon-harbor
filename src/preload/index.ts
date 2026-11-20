@@ -1,5 +1,6 @@
 import { contextBridge, type IpcRendererEvent, ipcRenderer } from "electron"
 import {
+  type CredentialsStatus,
   type Environment,
   IpcChannel,
   type LogLine,
@@ -39,6 +40,13 @@ const api: SiliconHarborApi = {
   checkRequirements: () => invoke(IpcChannel.reqCheck),
   fixRequirement: (id) => invoke(IpcChannel.reqFix, id),
 
+  getCredentials: () => invoke(IpcChannel.credGet),
+  checkCredentials: () => invoke(IpcChannel.credCheck),
+  signInGitHub: () => invoke(IpcChannel.credGitHubSignIn),
+  cancelGitHubSignIn: () => invoke(IpcChannel.credGitHubCancel),
+  saveArtifactoryToken: (req) => invoke(IpcChannel.credArtifactorySave, req),
+  removeArtifactoryToken: () => invoke(IpcChannel.credArtifactoryRemove),
+
   getSettings: () => invoke(IpcChannel.settingsGet),
   updateSettings: (patch) => invoke(IpcChannel.settingsUpdate, patch),
 
@@ -50,6 +58,8 @@ const api: SiliconHarborApi = {
     }),
   onRequirementsChanged: (cb) =>
     subscribe<RequirementStatus[]>(IpcChannel.evtRequirements, cb),
+  onCredentialsChanged: (cb) =>
+    subscribe<CredentialsStatus>(IpcChannel.evtCredentials, cb),
 }
 
 contextBridge.exposeInMainWorld("siliconHarbor", api)

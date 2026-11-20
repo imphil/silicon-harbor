@@ -1,10 +1,6 @@
 import { linuxDocker, rancherDesktop } from "./container-engine"
 import { credentialHelper } from "./credential-helper"
-import {
-  gitCredentialsLinux,
-  gitCredentialsMac,
-  gitCredentialsWindows,
-} from "./git-credentials"
+import { gitCredentials } from "./git-credentials"
 import { ide } from "./ide"
 import type { Requirement } from "./types"
 import { wsl } from "./wsl"
@@ -14,11 +10,11 @@ import { xquartz } from "./xquartz"
 export function requirementsFor(platform: NodeJS.Platform): Requirement[] {
   switch (platform) {
     case "darwin":
-      return [rancherDesktop, xquartz, credentialHelper, gitCredentialsMac, ide]
+      return [rancherDesktop, xquartz, credentialHelper, gitCredentials, ide]
     case "win32":
-      return [wsl, rancherDesktop, credentialHelper, gitCredentialsWindows, ide]
+      return [wsl, rancherDesktop, credentialHelper, gitCredentials, ide]
     default:
       // Linux (Fedora is the supported distribution).
-      return [linuxDocker, credentialHelper, gitCredentialsLinux, ide]
+      return [linuxDocker, credentialHelper, gitCredentials, ide]
   }
 }

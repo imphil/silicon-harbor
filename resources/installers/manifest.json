@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updated": "2026-11-19",
+  "updated": "2026-11-20",
   "items": {
     "rancher-desktop": {
       "name": "Rancher Desktop",
@@ -43,20 +43,25 @@
         }
       }
     },
-    "git-credential-manager": {
-      "name": "Git Credential Manager",
-      "version": "3.0.2",
-      "homepage": "https://github.com/git-ecosystem/git-credential-manager",
+    "gh": {
+      "name": "GitHub CLI",
+      "version": "2.105.0",
+      "homepage": "https://cli.github.com/",
       "assets": {
         "darwin-arm64": {
           "kind": "pkg",
-          "url": "https://github.com/git-ecosystem/git-credential-manager/releases/download/v3.0.2/gcm-osx-arm64-3.0.2.pkg",
-          "sha256": "4391c392785e0087a5b120c23c4ffa1c4aa4aed1e15c6ded084db4e1f8baa398"
+          "url": "https://github.com/cli/cli/releases/download/v2.105.0/gh_2.105.0_macOS_universal.pkg",
+          "sha256": "82c23144a06b1306b236fabd1a12d689711fa8fdaf823c9c6aebc28383a16655"
         },
         "darwin-x64": {
           "kind": "pkg",
-          "url": "https://github.com/git-ecosystem/git-credential-manager/releases/download/v3.0.2/gcm-osx-x64-3.0.2.pkg",
-          "sha256": "e12385440bfd9a8fadc5b1f2174b3c21017923acc2e48a30b953ef023e1625e2"
+          "url": "https://github.com/cli/cli/releases/download/v2.105.0/gh_2.105.0_macOS_universal.pkg",
+          "sha256": "82c23144a06b1306b236fabd1a12d689711fa8fdaf823c9c6aebc28383a16655"
+        },
+        "win32-x64": {
+          "kind": "msi",
+          "url": "https://github.com/cli/cli/releases/download/v2.105.0/gh_2.105.0_windows_amd64.msi",
+          "sha256": "d18367836c7dcf689ad2052730acf3ec6b9e8b1259a8bae3d512584f680d7525"
         }
       }
     },

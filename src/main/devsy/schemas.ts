@@ -180,3 +180,18 @@ export type SetupLogRead = z.infer<typeof SetupLogReadSchema>
 
 /** `provider list`: an object keyed by provider name. */
 export const ProviderListSchema = z.record(z.unknown())
+
+/** `secret list --result-format json` (cmd/secrets/list.go). */
+export const SecretEntrySchema = z
+  .object({
+    name: z.string(),
+    /** available | locked | missing | backend_unavailable | unknown */
+    availability: z.string(),
+    backend: z.string().optional(),
+  })
+  .passthrough()
+export type SecretEntry = z.infer<typeof SecretEntrySchema>
+export const SecretListSchema = z
+  .array(SecretEntrySchema)
+  .nullable()
+  .transform((v) => v ?? [])

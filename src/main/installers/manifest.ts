@@ -10,7 +10,7 @@ import manifestJson from "../../../resources/installers/manifest.json"
 export const InstallerIdSchema = z.enum([
   "rancher-desktop",
   "xquartz",
-  "git-credential-manager",
+  "gh",
   "git-for-windows",
   "docker-credential-icr",
 ])
