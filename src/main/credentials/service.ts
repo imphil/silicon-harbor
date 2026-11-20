@@ -10,12 +10,13 @@ import type { Host } from "../requirements/host"
 import {
   ARTIFACTORY_URL,
   checkArtifactoryToken,
-  TOKEN_SECRET,
-  TOKEN_TARGET,
-  USER_SECRET,
-  USER_TARGET,
   validW3id,
 } from "./artifactory"
+import {
+  type ArtifactoryTokens,
+  SECRET,
+  type TokenState,
+} from "./artifactory-tokens"
 import {
   checkGitHubAccount,
   findGh,
@@ -27,6 +28,18 @@ import { findIcrHelper, ICR_REGISTRY, type IcrGet, icrGet } from "./ibmcloud"
 
 /** Results older than this are checked again when the pane asks for them. */
 export const STALE_AFTER_MS = 10 * 60_000
+
+/** How often the Artifactory tokens are checked for renewal while the app runs. */
+export const RENEW_INTERVAL_MS = 60 * 60_000
+
+/** Delay of the first renewal check after start (the environment list loads first). */
+export const FIRST_RENEW_DELAY_MS = 30_000
+
+export interface DeliveryResult {
+  delivered: number
+  busy: number
+  failed: number
+}
 
 /** What we need from Devsy's secret store (DevsyClient). */
 export interface SecretStore {
@@ -40,6 +53,10 @@ export interface CredentialServiceDeps {
   host: Host
   secrets: SecretStore
   signIn: GitHubSignIn
+  /** The Artifactory parent and container token and their files (shared design). */
+  tokens: ArtifactoryTokens
+  /** Writes renewed secret files into running environments (EnvironmentService.deliverSecrets). */
+  deliver?(): Promise<DeliveryResult>
   /** Our bin dir (docker-credential-icr may be there, see credential-helper.ts). */
   binDir: string
   onChange(status: CredentialsStatus): void
@@ -74,6 +91,10 @@ export class CredentialService {
   /** When the last full check finished (ms), 0 before the first. */
   private lastCheck = 0
   private icr: IcrGet | undefined
+  /** The last automatic renewal's error, shown in the pane until one succeeds. */
+  private renewalError: string | undefined
+  /** Changed files not yet written into every running environment. */
+  private pendingDelivery = false
 
   constructor(private readonly deps: CredentialServiceDeps) {}
 
@@ -139,6 +160,11 @@ export class CredentialService {
     this.deps.signIn.cancel()
   }
 
+  /**
+   * Sets Artifactory up with an identity token (or only changes the w3id):
+   * creates Silicon Harbor's parent and container token and the files, then
+   * delivers them to running environments.
+   */
   async saveArtifactory(
     req: SaveArtifactoryRequest,
   ): Promise<CredentialsStatus> {
@@ -150,50 +176,119 @@ export class CredentialService {
       throw new Error(
         "The token contains spaces. Copy it again from Artifactory.",
       )
-    if (!token && this.artifactory.state === "missing")
-      throw new Error("Paste the token you created on the Artifactory page.")
-    if (token) await this.deps.secrets.setSecret(TOKEN_SECRET, token)
-    await this.deps.secrets.setSecret(USER_SECRET, user)
-    this.deps.log?.("credentials: Artifactory token saved")
+    const { tokens } = this.deps
+    if (token) {
+      await tokens.setup(token, user)
+      this.deps.log?.("credentials: Artifactory set up")
+    } else {
+      if (!(await tokens.state()).configured)
+        throw new Error(
+          "Paste the identity token you created on the Artifactory page.",
+        )
+      await this.deps.secrets.setSecret(SECRET.user, user)
+      await tokens.renew()
+    }
+    this.renewalError = undefined
+    this.pendingDelivery = true
+    await this.deliver()
     await this.checkArtifactory()
     return this.current()
   }
 
+  /** Revokes Silicon Harbor's tokens and hands /run/secrets back to the container scripts. */
   async removeArtifactory(): Promise<CredentialsStatus> {
-    const stored = new Set(
-      (await this.deps.secrets.listSecrets()).map((e) => e.name),
-    )
-    for (const name of [TOKEN_SECRET, USER_SECRET])
-      if (stored.has(name)) await this.deps.secrets.deleteSecret(name)
-    this.deps.log?.("credentials: Artifactory token removed")
+    await this.deps.tokens.remove()
+    this.deps.log?.("credentials: Artifactory removed")
+    this.renewalError = undefined
+    this.pendingDelivery = true
+    await this.deliver()
+    await this.checkArtifactory()
+    return this.current()
+  }
+
+  /** "Renew now": a new container token, delivered to running environments. */
+  async renewArtifactory(): Promise<CredentialsStatus> {
+    await this.renewNow(true)
     await this.checkArtifactory()
     return this.current()
   }
 
   /**
-   * `--secret` specs for `devsy workspace up`: the stored w3id and token,
-   * mounted at /run/secrets/IBM_USER and /run/secrets/ARTIFACTORY_TOKEN.
-   * Never fails an `up`: without a readable store there are no flags.
+   * Renews what is due and delivers changed files. Never throws: a failure
+   * is shown in the pane and tried again at the next check.
+   */
+  async renewNow(force = false): Promise<void> {
+    try {
+      if (await this.deps.tokens.renew({ force })) this.pendingDelivery = true
+      this.renewalError = undefined
+    } catch (error) {
+      this.renewalError = (error as Error).message
+      this.deps.log?.(
+        `credentials: Artifactory renewal failed: ${this.renewalError}`,
+      )
+    }
+    if (this.pendingDelivery) await this.deliver()
+  }
+
+  /** Renewal checks while the app runs: shortly after start, then every hour. */
+  startSchedule(): () => void {
+    const first = setTimeout(() => void this.renewNow(), FIRST_RENEW_DELAY_MS)
+    const every = setInterval(() => void this.renewNow(), RENEW_INTERVAL_MS)
+    first.unref?.()
+    every.unref?.()
+    return () => {
+      clearTimeout(first)
+      clearInterval(every)
+    }
+  }
+
+  /** The computer woke up: tokens may have come due while it slept. */
+  wake(): void {
+    void this.renewNow()
+  }
+
+  /**
+   * `--secret` specs for `devsy workspace up`: the Artifactory token, the
+   * w3id, netrc, JFrog config and marker in /run/secrets. Renews first if
+   * due (this `up` then delivers the files). Never fails an `up`: without a
+   * readable store there are no flags.
    */
   async upSecretFlags(): Promise<string[]> {
-    let entries: SecretEntry[]
     try {
-      entries = await this.deps.secrets.listSecrets()
+      await this.deps.tokens.renew()
+    } catch (error) {
+      this.renewalError = (error as Error).message
+      this.deps.log?.(
+        `credentials: Artifactory renewal before up failed: ${this.renewalError}`,
+      )
+    }
+    try {
+      return await this.deps.tokens.mounts()
     } catch (error) {
       this.deps.log?.(
         `credentials: secret store unavailable, starting without secrets: ${(error as Error).message}`,
       )
       return []
     }
-    const available = new Set(
-      entries.filter((e) => e.availability === "available").map((e) => e.name),
-    )
-    const flags: string[] = []
-    if (available.has(USER_SECRET))
-      flags.push(`${USER_SECRET},type=mount,target=${USER_TARGET}`)
-    if (available.has(TOKEN_SECRET))
-      flags.push(`${TOKEN_SECRET},type=mount,target=${TOKEN_TARGET}`)
-    return flags
+  }
+
+  private async deliver(): Promise<void> {
+    if (!this.deps.deliver) {
+      this.pendingDelivery = false
+      return
+    }
+    try {
+      const result = await this.deps.deliver()
+      this.pendingDelivery = result.busy > 0 || result.failed > 0
+      this.deps.log?.(
+        `credentials: delivered to ${result.delivered} environment(s)${result.busy ? `, ${result.busy} busy` : ""}${result.failed ? `, ${result.failed} failed` : ""}`,
+      )
+    } catch (error) {
+      this.pendingDelivery = true
+      this.deps.log?.(
+        `credentials: delivery failed: ${(error as Error).message}`,
+      )
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -284,10 +379,9 @@ export class CredentialService {
 
   private async artifactoryStatus(): Promise<ArtifactoryCredential> {
     const base = { url: ARTIFACTORY_URL }
-    const { secrets } = this.deps
-    let entries: SecretEntry[]
+    let tokenState: TokenState
     try {
-      entries = await secrets.listSecrets()
+      tokenState = await this.deps.tokens.state()
     } catch (error) {
       return {
         ...base,
@@ -295,48 +389,46 @@ export class CredentialService {
         detail: `Could not read Devsy's secret store: ${(error as Error).message}`,
       }
     }
-    const entry = (name: string) => entries.find((e) => e.name === name)
-    const userEntry = entry(USER_SECRET)
-    const user =
-      userEntry?.availability === "available"
-        ? await secrets.getSecret(USER_SECRET).catch(() => undefined)
-        : undefined
-    const withUser = user ? { ...base, user } : base
-    const tokenEntry = entry(TOKEN_SECRET)
-    if (!tokenEntry)
-      return { ...withUser, state: "missing", detail: "No token stored." }
-    if (tokenEntry.availability !== "available")
-      return {
-        ...withUser,
-        state: "unknown",
-        detail: `The token is stored, but the secret store is ${tokenEntry.availability.replace(/_/g, " ")}.`,
-      }
+    const iso = (s?: number) =>
+      s === undefined ? undefined : new Date(s * 1000).toISOString()
+    const tokenExpiresAt = iso(tokenState.tokenExpiresAt)
+    const parentExpiresAt = iso(tokenState.parentExpiresAt)
+    const known = {
+      ...base,
+      ...(tokenState.user ? { user: tokenState.user } : {}),
+      ...(tokenExpiresAt ? { tokenExpiresAt } : {}),
+      ...(parentExpiresAt ? { parentExpiresAt } : {}),
+      ...(this.renewalError ? { renewalError: this.renewalError } : {}),
+    }
+    if (!tokenState.configured)
+      return { ...known, state: "missing", detail: "Not set up yet." }
     let token: string
     try {
-      token = await secrets.getSecret(TOKEN_SECRET)
-    } catch (error) {
+      token = await this.deps.secrets.getSecret(SECRET.token)
+    } catch {
       return {
-        ...withUser,
+        ...known,
         state: "unknown",
-        detail: `Could not read the stored token: ${(error as Error).message}`,
+        detail: "The container token is missing. Renew now to create one.",
       }
     }
     const result = await checkArtifactoryToken(token, this.deps.fetch)
     switch (result.kind) {
       case "ok":
         return {
-          ...withUser,
+          ...known,
           state: "ok",
-          detail: "Artifactory accepts the token.",
+          detail:
+            "Artifactory accepts the token. Silicon Harbor renews it while it runs.",
         }
       case "invalid":
         return {
-          ...withUser,
+          ...known,
           state: "invalid",
-          detail: `Artifactory rejects the stored token (HTTP ${result.status}). Create a new one and save it here.`,
+          detail: `Artifactory rejects the container token (HTTP ${result.status}). Renew now, or set up again with a new identity token.`,
         }
       case "unknown":
-        return { ...withUser, state: "unknown", detail: result.detail }
+        return { ...known, state: "unknown", detail: result.detail }
     }
   }
 

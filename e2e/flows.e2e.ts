@@ -209,7 +209,7 @@ test("Credentials: GitHub sign-in with a one-time code, then an Artifactory toke
   })
 
   const artifactory = page.getByTestId("cred-artifactory")
-  await expect(artifactory).toContainText("No token stored.")
+  await expect(artifactory).toContainText("Not set up yet.")
   await expect(artifactory).toContainText("Generate an Identity Token")
   // The w3id defaults to the GitHub account's email address.
   await expect(
@@ -219,9 +219,20 @@ test("Credentials: GitHub sign-in with a one-time code, then an Artifactory toke
   await artifactory.getByRole("button", { name: "Save and check" }).click()
   await expect(artifactory).toContainText("Artifactory accepts the token.")
   await expect(artifactory).toContainText("w3id: jane.doe@ibm.com")
+  // Silicon Harbor's own tokens, renewed while it runs.
+  await expect(page.getByTestId("artifactory-expiry")).toContainText(
+    "The token in your environments expires in 7 days",
+  )
+  await expect(page.getByTestId("artifactory-expiry")).toContainText(
+    "expires in 90 days",
+  )
   await expect(
     artifactory.getByRole("button", { name: "Replace token" }),
   ).toBeVisible()
+  await artifactory.getByRole("button", { name: "Renew now" }).click()
+  await expect(
+    artifactory.getByRole("button", { name: "Renew now" }),
+  ).toBeEnabled()
   // IBM Cloud: "Log in" asks docker-credential-icr, which opens the login.
   const ibmCloud = page.getByTestId("cred-ibmcloud")
   await expect(ibmCloud).toContainText("Not logged in yet.")

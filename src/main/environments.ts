@@ -89,6 +89,8 @@ interface EnvRecord {
   /** Known to `workspace list`. */
   exists: boolean
   op?: RunningOp
+  /** A quiet `up` that only writes renewed secret files (deliverSecrets). */
+  delivering?: boolean
   /** Last failed or cancelled operation. */
   lastOp?: Operation
   /** For environments whose creation failed before Devsy created a workspace. */
@@ -353,7 +355,7 @@ export class EnvironmentService {
   }
 
   private assertIdle(r: EnvRecord): void {
-    if (r.op) throw new BusyError(r.id)
+    if (r.op || r.delivering) throw new BusyError(r.id)
   }
 
   // -------------------------------------------------------------------------
@@ -459,6 +461,70 @@ export class EnvironmentService {
       return
     }
     await this.follow(r, run)
+  }
+
+  /**
+   * Writes renewed secret files (Settings › Credentials) into every running
+   * environment: a quiet `up` without IDE launch, not shown as an operation.
+   * Environments busy with an operation of their own are left for a later
+   * call; a stopped one gets the files at its next start.
+   */
+  async deliverSecrets(): Promise<{
+    delivered: number
+    busy: number
+    failed: number
+  }> {
+    const running = [...this.records.values()].filter(
+      (r) => r.exists && this.stateOf(r) === "running",
+    )
+    const result = { delivered: 0, busy: 0, failed: 0 }
+    for (const r of running) {
+      if (r.op || r.delivering) {
+        result.busy++
+        continue
+      }
+      r.delivering = true
+      try {
+        await this.quietUp(r)
+        result.delivered++
+      } catch (error) {
+        result.failed++
+        this.log(
+          r.id,
+          "warn",
+          `Could not update the credentials: ${(error as Error).message}`,
+        )
+      } finally {
+        r.delivering = false
+      }
+    }
+    return result
+  }
+
+  private async quietUp(r: EnvRecord): Promise<void> {
+    const secrets = (await this.opts.upSecrets?.()) ?? []
+    const task = await this.opts.client.submitUp({
+      source: r.id,
+      waitFor: "postStartCommand",
+      ...(secrets.length > 0 ? { secrets } : {}),
+      ide: this.opts.ideOverride ?? r.ide,
+      ideLaunch: "skip",
+      sshConfigPath: this.opts.sshConfigPath,
+    })
+    let failure: string | undefined
+    let succeeded = false
+    const handle = this.opts.client.followTask(task.id, {
+      onEnvelope: (envelope) => {
+        if (envelope.kind === "result") succeeded = true
+        else if (envelope.kind === "error")
+          failure = envelope.message || "Devsy reported an error."
+      },
+      onLog: () => {},
+      onText: () => {},
+    })
+    const code = await handle.done
+    if (!succeeded || code !== 0)
+      throw new Error(failure ?? `Devsy exited with code ${code}.`)
   }
 
   /** Follows a detached `up` task to its end. */

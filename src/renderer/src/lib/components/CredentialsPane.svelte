@@ -19,8 +19,8 @@ import {
 } from "carbon-components-svelte"
 import { untrack } from "svelte"
 import { credentials } from "../stores"
-import { checkedAgo } from "../stores/clock.svelte"
-import { relativeTime } from "../view"
+import { checkedAgo, clock } from "../stores/clock.svelte"
+import { expiresIn, relativeTime } from "../view"
 import RequirementIcon from "./RequirementIcon.svelte"
 
 /** Settings › Credentials: what environments can sign in with, and its state. */
@@ -212,19 +212,44 @@ function cancelEdit(): void {
           {artifactory.detail}
           {#if artifactory.user}<span class="sh-muted">w3id: {artifactory.user}</span>{/if}
         </p>
+        {#if artifactory.tokenExpiresAt}
+          <p class="sh-small" data-testid="artifactory-expiry">
+            The token in your environments {expiresIn(artifactory.tokenExpiresAt, clock.now)};
+            Silicon Harbor replaces it after half its lifetime.
+            {#if artifactory.parentExpiresAt}
+              <span class="sh-muted">
+                The token it renews with, kept on this computer only,
+                {expiresIn(artifactory.parentExpiresAt, clock.now)}.
+              </span>
+            {/if}
+          </p>
+        {/if}
+        {#if artifactory.renewalError}
+          <InlineNotification
+            kind="warning"
+            lowContrast
+            hideCloseButton
+            title="Automatic renewal failed:"
+            subtitle={`${artifactory.renewalError} Silicon Harbor tries again every hour.`}
+          />
+        {/if}
         <p class="sh-muted sh-small">
-          Environments get the token at <span class="sh-mono">/run/secrets/ARTIFACTORY_TOKEN</span>
-          and your w3id at <span class="sh-mono">/run/secrets/IBM_USER</span> when they start. A
-          change reaches running environments at their next start. If the repository does
-          not keep <span class="sh-mono">/run/secrets</span> in a volume of its own, an
-          environment created before the first token was saved is recreated once at its next
-          start; changes outside its source folder are lost then.
+          Environments find the token, your w3id, a <span class="sh-mono">netrc</span> and a
+          JFrog CLI configuration in <span class="sh-mono">/run/secrets</span>. Silicon Harbor
+          passes a renewed token to running environments as soon as it has one. If the repository does not keep
+          <span class="sh-mono">/run/secrets</span> in a volume of its own, an environment
+          created before Artifactory was set up is recreated once at its next start; changes
+          outside its source folder are lost then.
         </p>
         <p class="sh-muted sh-small">{checkedAgo(artifactory.checkedAt, relativeTime)}</p>
 
         {#if showForm}
           <div class="sh-form">
-            <p>Artifactory has no sign-in Silicon Harbor can open for you. Create a token by hand:</p>
+            <p>
+              Artifactory has no sign-in Silicon Harbor can open for you. Create an identity
+              token by hand once: Silicon Harbor uses it to create tokens of its own, which it
+              renews while it runs. You can revoke the identity token afterwards.
+            </p>
             <OrderedList>
               <ListItem>
                 Open <Link href={artifactory.url} target="_blank" rel="noreferrer">{new URL(artifactory.url).host}</Link>
@@ -258,6 +283,9 @@ function cancelEdit(): void {
                 <Button kind="ghost" size="small" on:click={cancelEdit}>Cancel</Button>
               {/if}
               {#if stored && !editing}
+                <Button kind="tertiary" size="small" disabled={credentials.renewing} on:click={() => credentials.renewArtifactory()}>
+                  {credentials.renewing ? "Renewing…" : "Renew now"}
+                </Button>
                 <Button kind="danger-ghost" size="small" on:click={() => credentials.removeArtifactory()}>
                   Remove token
                 </Button>
@@ -266,7 +294,10 @@ function cancelEdit(): void {
           </div>
         {:else}
           <div class="sh-buttons">
-            <Button kind="tertiary" size="small" on:click={() => (editing = true)}>
+            <Button kind="tertiary" size="small" disabled={credentials.renewing} on:click={() => credentials.renewArtifactory()}>
+              {credentials.renewing ? "Renewing…" : "Renew now"}
+            </Button>
+            <Button kind="ghost" size="small" on:click={() => (editing = true)}>
               Replace token
             </Button>
             <Button kind="danger-ghost" size="small" on:click={() => credentials.removeArtifactory()}>

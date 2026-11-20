@@ -292,9 +292,23 @@ const MOCK_IBM_CLOUD_OK: IbmCloudCredential = {
   account: { email: "jane.doe@ibm.com", name: "Jane Doe" },
 }
 
+const DAY_MS = 24 * 60 * 60_000
+
+/** Silicon Harbor's own tokens as set up at `nowMs`: 7 and 90 days. */
+function mockArtifactoryTokens(nowMs: number, age = 0) {
+  return {
+    tokenExpiresAt: new Date(nowMs - age + 7 * DAY_MS).toISOString(),
+    parentExpiresAt: new Date(nowMs - age + 90 * DAY_MS).toISOString(),
+  }
+}
+
+const ARTIFACTORY_OK_DETAIL =
+  "Artifactory accepts the token. Silicon Harbor renews it while it runs."
+
 function mockCredentials(
   scenario: MockScenario,
   checkedAt: string,
+  nowMs: number,
 ): CredentialsStatus {
   // A new user (setup or no environments yet) has no sign-ins either.
   const fresh = scenario === "first-run" || scenario === "empty"
@@ -307,12 +321,13 @@ function mockCredentials(
         }
       : MOCK_GITHUB_OK,
     artifactory: fresh
-      ? { url: ARTIFACTORY_URL, state: "missing", detail: "No token stored." }
+      ? { url: ARTIFACTORY_URL, state: "missing", detail: "Not set up yet." }
       : {
           url: ARTIFACTORY_URL,
           state: "ok",
-          detail: "Artifactory accepts the token.",
+          detail: ARTIFACTORY_OK_DETAIL,
           user: "jane.doe@ibm.com",
+          ...mockArtifactoryTokens(nowMs, 2 * DAY_MS),
         },
     ibmCloud: fresh
       ? {
@@ -400,6 +415,7 @@ export function createMockApi(options: MockOptions = {}): SiliconHarborApi {
   let credentials: CredentialsStatus = mockCredentials(
     scenario,
     iso(4 * 60_000),
+    now(),
   )
   let signInRun = 0
   let ibmRun = 0
@@ -981,18 +997,41 @@ export function createMockApi(options: MockOptions = {}): SiliconHarborApi {
         throw new Error(
           "Enter your w3id, the IBM email address you log in with.",
         )
-      if (!req.token.trim() && credentials.artifactory.state === "missing")
-        throw new Error("Paste the token you created on the Artifactory page.")
-      const rejected = req.token.trim() === "bad"
+      const token = req.token.trim()
+      if (!token && credentials.artifactory.state === "missing")
+        throw new Error(
+          "Paste the identity token you created on the Artifactory page.",
+        )
+      // An identity token Artifactory rejects is not kept.
+      if (token === "bad")
+        throw new Error("Artifactory rejected the token (HTTP 401).")
+      const { renewalError: _, ...artifactory } = credentials.artifactory
       return setCredentials({
         ...credentials,
         artifactory: {
-          ...credentials.artifactory,
+          ...artifactory,
           user,
-          state: rejected ? "invalid" : "ok",
-          detail: rejected
-            ? "Artifactory rejects the stored token (HTTP 401). Create a new one and save it here."
-            : "Artifactory accepts the token.",
+          state: "ok",
+          detail: ARTIFACTORY_OK_DETAIL,
+          checkedAt: iso(),
+          ...(token ? mockArtifactoryTokens(now()) : {}),
+        },
+      })
+    },
+
+    async renewArtifactoryToken() {
+      await delay(800)
+      if (credentials.artifactory.state === "missing")
+        throw new Error("Artifactory is not set up.")
+      const { renewalError: _, ...artifactory } = credentials.artifactory
+      return setCredentials({
+        ...credentials,
+        artifactory: {
+          ...artifactory,
+          state: "ok",
+          detail: ARTIFACTORY_OK_DETAIL,
+          checkedAt: iso(),
+          tokenExpiresAt: new Date(now() + 7 * DAY_MS).toISOString(),
         },
       })
     },
@@ -1004,7 +1043,8 @@ export function createMockApi(options: MockOptions = {}): SiliconHarborApi {
         artifactory: {
           url: ARTIFACTORY_URL,
           state: "missing",
-          detail: "No token stored.",
+          detail: "Not set up yet.",
+          checkedAt: iso(),
         },
       })
     },

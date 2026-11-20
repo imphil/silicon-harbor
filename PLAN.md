@@ -318,6 +318,11 @@ documented; all spikes green or with a written workaround.
 - 2026-11-20: Git sign-in switched to the GitHub CLI on all platforms (GCM dropped; pinned gh 2.105.0 pkg/MSI),
   plus Settings › Credentials (GitHub account check, browser sign-in with the one-time code shown in the app,
   Artifactory token in Devsy's secret store, mounted at `/run/secrets` on every `up`). See docs/credentials.md.
+- 2026-11-20: Artifactory v1 (shared mode, local containers): the pasted identity token is used once to create a
+  90-day parent token kept on the host, which creates 7-day container tokens; renewed while the app runs (start,
+  hourly, wake, before `up`); `netrc`, JFrog CLI config and a `.silicon-harbor.json` marker for the container
+  scripts in `/run/secrets`; changes delivered to running environments with a quiet `up`. Not verified: the real
+  Access API (create, list, revoke) — needs a manual test with an identity token; macOS/Windows.
 - docker-credential-icr installs into a directory on the user's own PATH (macOS `/usr/local/bin` with admin prompt, Fedora `~/.local/bin`, Windows per-user folder added to the user PATH), so the shared `credHelpers` entry also works in the user's own terminal; that directory is also prepended to the Devsy CLI's PATH.
 
 ### M1 — Engine integration (weeks 3–4, Track A)

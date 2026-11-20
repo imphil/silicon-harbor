@@ -211,6 +211,12 @@ export interface ArtifactoryCredential {
   detail: string
   /** The w3id (IBM email address) the token belongs to. */
   user?: string
+  /** ISO 8601: when the container token (in /run/secrets) expires. */
+  tokenExpiresAt?: string
+  /** ISO 8601: when the parent token (on this computer only) expires. */
+  parentExpiresAt?: string
+  /** The last automatic renewal failed with this message. */
+  renewalError?: string
   /** ISO 8601: when the state was last checked. */
   checkedAt?: string
 }
@@ -248,7 +254,10 @@ export interface CredentialsStatus {
 export interface SaveArtifactoryRequest {
   /** w3id (IBM email address). */
   user: string
-  /** Empty keeps the stored token (only the w3id changes). */
+  /**
+   * An identity token from the Artifactory page: used once to create Silicon
+   * Harbor's own tokens. Empty keeps them (only the w3id changes).
+   */
   token: string
 }
 
@@ -307,6 +316,8 @@ export interface SiliconHarborApi {
   cancelIbmCloudSignIn(): Promise<void>
   /** Stores the w3id and token in Devsy's secret store and checks the token. */
   saveArtifactoryToken(req: SaveArtifactoryRequest): Promise<CredentialsStatus>
+  /** Re-creates the container token now and delivers it to running environments. */
+  renewArtifactoryToken(): Promise<CredentialsStatus>
   removeArtifactoryToken(): Promise<CredentialsStatus>
 
   getSettings(): Promise<Settings>
@@ -343,6 +354,7 @@ export const IpcChannel = {
   credIbmCloudCancel: "cred:ibmcloud-cancel",
   credArtifactorySave: "cred:artifactory-save",
   credArtifactoryRemove: "cred:artifactory-remove",
+  credArtifactoryRenew: "cred:artifactory-renew",
   settingsGet: "settings:get",
   settingsUpdate: "settings:update",
   // main → renderer events

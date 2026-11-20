@@ -47,6 +47,7 @@ const api: SiliconHarborApi = {
   cancelIbmCloudSignIn: () => invoke(IpcChannel.credIbmCloudCancel),
   saveArtifactoryToken: (req) => invoke(IpcChannel.credArtifactorySave, req),
   removeArtifactoryToken: () => invoke(IpcChannel.credArtifactoryRemove),
+  renewArtifactoryToken: () => invoke(IpcChannel.credArtifactoryRenew),
 
   getSettings: () => invoke(IpcChannel.settingsGet),
   updateSettings: (patch) => invoke(IpcChannel.settingsUpdate, patch),

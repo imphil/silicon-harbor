@@ -4,9 +4,8 @@ import type { CredentialsStatus } from "../../shared/api"
 import {
   ARTIFACTORY_CHECK_URL,
   checkArtifactoryToken,
-  TOKEN_SECRET,
-  USER_SECRET,
 } from "../credentials/artifactory"
+import { SECRET } from "../credentials/artifactory-tokens"
 import {
   checkGitHubAccount,
   GitHubSignIn,
@@ -18,8 +17,8 @@ import {
   ICR_REGISTRY,
   icrGet,
 } from "../credentials/ibmcloud"
-import { CredentialService, type SecretStore } from "../credentials/service"
-import type { SecretEntry } from "../devsy/schemas"
+import { CredentialService } from "../credentials/service"
+import { FakeArtifactory, FakeStore, tokensFor } from "./fake-artifactory"
 import { FakeHost, type FakeProcess, fail, ok } from "./fake-host"
 
 const GH = "/usr/bin/gh"
@@ -231,51 +230,51 @@ describe("Artifactory token check", () => {
   })
 })
 
-class FakeSecrets implements SecretStore {
-  values = new Map<string, string>()
-  availability: SecretEntry["availability"] = "available"
-  sets: string[] = []
-  async listSecrets(): Promise<SecretEntry[]> {
-    return [...this.values.keys()].map((name) => ({
-      name,
-      availability: this.availability,
-    }))
-  }
-  async getSecret(name: string) {
-    const value = this.values.get(name)
-    if (value === undefined) throw new Error(`secret ${name} not found`)
-    return value
-  }
-  async setSecret(name: string, value: string) {
-    this.sets.push(name)
-    this.values.set(name, value)
-  }
-  async deleteSecret(name: string) {
-    this.values.delete(name)
-  }
-}
-
 describe("credential service", () => {
-  function service(fetchStatus = 200) {
+  const USER = "dev@ibm.com"
+  const DAY = 24 * 60 * 60
+
+  function service() {
     const host = ghHost()
-    const secrets = new FakeSecrets()
+    const art = new FakeArtifactory()
+    const store = new FakeStore()
+    const { tokens } = tokensFor(store, art, { github: () => "gho_x" })
     const changes: CredentialsStatus[] = []
     const signIn = new GitHubSignIn({ host, onChange: () => {} })
-    const fetchFn = vi.fn(async () => new Response("", { status: fetchStatus }))
+    const deliveries: string[] = []
+    let busy = 0
     const clock = { now: Date.parse("2026-11-20T12:00:00Z") }
     const creds = new CredentialService({
       host,
-      secrets,
+      secrets: store,
       signIn,
+      tokens,
+      deliver: async () => {
+        deliveries.push("deliver")
+        const result = { delivered: busy ? 0 : 1, busy, failed: 0 }
+        busy = 0
+        return result
+      },
       binDir: BIN_DIR,
-      fetch: fetchFn,
+      fetch: art.fetch as typeof fetch,
       onChange: (s) => changes.push(s),
       now: () => clock.now,
     })
-    return { host, secrets, creds, changes, fetchFn, clock }
+    return {
+      host,
+      art,
+      store,
+      creds,
+      changes,
+      deliveries,
+      clock,
+      busyOnce: () => {
+        busy = 1
+      },
+    }
   }
 
-  it("shows the GitHub account and a missing Artifactory token", async () => {
+  it("shows the GitHub account and that Artifactory is not set up", async () => {
     const { creds } = service()
     const status = await creds.get()
     expect(status.github).toEqual({
@@ -289,78 +288,123 @@ describe("credential service", () => {
     expect(status.artifactory).toEqual({
       url: "https://eu.artifactory.swg-devops.com/",
       state: "missing",
-      detail: "No token stored.",
+      detail: "Not set up yet.",
       checkedAt: "2026-11-20T12:00:00.000Z",
     })
   })
 
-  it("stores the w3id and token, checks the token and mounts both", async () => {
-    const { creds, secrets, fetchFn } = service()
+  it("sets up with an identity token, delivers the files and shows both expiries", async () => {
+    const { creds, art, deliveries } = service()
     const status = await creds.saveArtifactory({
-      user: " dev@ibm.com ",
-      token: " tok123\n",
+      user: ` ${USER} `,
+      token: ` ${art.identity}\n`,
     })
-    expect(secrets.values.get(TOKEN_SECRET)).toBe("tok123")
-    expect(secrets.values.get(USER_SECRET)).toBe("dev@ibm.com")
-    expect(fetchFn).toHaveBeenCalledTimes(1)
     expect(status.artifactory).toMatchObject({
       state: "ok",
-      user: "dev@ibm.com",
-      detail: "Artifactory accepts the token.",
+      user: USER,
+      detail:
+        "Artifactory accepts the token. Silicon Harbor renews it while it runs.",
+      tokenExpiresAt: new Date((art.clock.s + 7 * DAY) * 1000).toISOString(),
+      parentExpiresAt: new Date((art.clock.s + 90 * DAY) * 1000).toISOString(),
     })
+    expect(deliveries).toHaveLength(1)
     expect(await creds.upSecretFlags()).toEqual([
       "SH_IBM_USER,type=mount,target=IBM_USER",
       "SH_ARTIFACTORY_TOKEN,type=mount,target=ARTIFACTORY_TOKEN",
+      "SH_NETRC,type=mount,target=netrc",
+      "SH_JFROG_CONF,type=mount,target=jfrog-cli.conf",
+      "SH_MARKER,type=mount,target=.silicon-harbor.json",
     ])
   })
 
-  it("keeps the stored token when only the w3id changes", async () => {
-    const { creds, secrets } = service()
-    await creds.saveArtifactory({ user: "dev@ibm.com", token: "tok123" })
+  it("changes only the w3id and rebuilds the files", async () => {
+    const { creds, art, store, deliveries } = service()
+    await creds.saveArtifactory({ user: USER, token: art.identity })
+    const posts = art.calls.filter((c) => c.startsWith("POST")).length
     await creds.saveArtifactory({ user: "other@ibm.com", token: "" })
-    expect(secrets.values.get(TOKEN_SECRET)).toBe("tok123")
-    expect(secrets.values.get(USER_SECRET)).toBe("other@ibm.com")
+    expect(art.calls.filter((c) => c.startsWith("POST"))).toHaveLength(posts)
+    expect(store.values.get(SECRET.netrc)).toContain("login other@ibm.com")
+    expect(deliveries).toHaveLength(2)
   })
 
-  it("rejects an invalid w3id, or no token when none is stored", async () => {
+  it("rejects an invalid w3id, a token with spaces, or no token when not set up", async () => {
     const { creds } = service()
-    await creds.check()
     await expect(
       creds.saveArtifactory({ user: "dev", token: "tok" }),
     ).rejects.toThrow(/w3id/)
     await expect(
-      creds.saveArtifactory({ user: "dev@ibm.com", token: "" }),
-    ).rejects.toThrow(/Paste the token/)
+      creds.saveArtifactory({ user: USER, token: "a b" }),
+    ).rejects.toThrow(/spaces/)
+    await expect(
+      creds.saveArtifactory({ user: USER, token: "" }),
+    ).rejects.toThrow(/Paste the identity token/)
   })
 
-  it("reports a token Artifactory rejects", async () => {
-    const { creds } = service(401)
-    const status = await creds.saveArtifactory({
-      user: "dev@ibm.com",
-      token: "old",
-    })
-    expect(status.artifactory).toMatchObject({
-      state: "invalid",
-      detail:
-        "Artifactory rejects the stored token (HTTP 401). Create a new one and save it here.",
-    })
+  it("reports an identity token Artifactory rejects", async () => {
+    const { creds } = service()
+    await expect(
+      creds.saveArtifactory({ user: USER, token: "wrong" }),
+    ).rejects.toThrow("Artifactory rejected the token (HTTP 401).")
   })
 
-  it("removes both secrets", async () => {
-    const { creds, secrets } = service()
-    await creds.saveArtifactory({ user: "dev@ibm.com", token: "tok" })
+  it("renews when due and delivers, retrying while environments are busy", async () => {
+    const { creds, art, deliveries, busyOnce } = service()
+    await creds.saveArtifactory({ user: USER, token: art.identity })
+    deliveries.length = 0
+    await creds.renewNow()
+    expect(deliveries).toEqual([]) // nothing due
+    art.clock.s += 4 * DAY
+    busyOnce()
+    await creds.renewNow()
+    expect(deliveries).toHaveLength(1) // renewed, but one environment was busy
+    await creds.renewNow()
+    expect(deliveries).toHaveLength(2) // nothing due, delivered the pending files
+    await creds.renewNow()
+    expect(deliveries).toHaveLength(2)
+  })
+
+  it("shows a failed renewal and clears it once one succeeds", async () => {
+    const { creds, art } = service()
+    await creds.saveArtifactory({ user: USER, token: art.identity })
+    art.clock.s += 4 * DAY
+    art.down = true
+    await creds.renewNow()
+    let status = await creds.check()
+    expect(status.artifactory.renewalError).toBe(
+      "Could not reach Artifactory (fetch failed).",
+    )
+    art.down = false
+    await creds.renewNow()
+    status = await creds.check()
+    expect(status.artifactory.renewalError).toBeUndefined()
+    expect(status.artifactory.state).toBe("ok")
+  })
+
+  it("renews now on request", async () => {
+    const { creds, art, store, deliveries } = service()
+    await creds.saveArtifactory({ user: USER, token: art.identity })
+    const before = store.values.get(SECRET.token)
+    await creds.renewArtifactory()
+    expect(store.values.get(SECRET.token)).not.toBe(before)
+    expect(deliveries).toHaveLength(2)
+  })
+
+  it("removes: revokes the tokens, releases /run/secrets and delivers that", async () => {
+    const { creds, art, deliveries } = service()
+    await creds.saveArtifactory({ user: USER, token: art.identity })
     const status = await creds.removeArtifactory()
-    expect(secrets.values.size).toBe(0)
     expect(status.artifactory.state).toBe("missing")
-    expect(await creds.upSecretFlags()).toEqual([])
+    expect(art.tokens.every((t) => t.revoked)).toBe(true)
+    expect(deliveries).toHaveLength(2)
+    expect(await creds.upSecretFlags()).toEqual([
+      "SH_MARKER,type=mount,target=.silicon-harbor.json",
+    ])
   })
 
-  it("starts environments without secrets when the store is locked or broken", async () => {
-    const { creds, secrets } = service()
-    await creds.saveArtifactory({ user: "dev@ibm.com", token: "tok" })
-    secrets.availability = "locked"
-    expect(await creds.upSecretFlags()).toEqual([])
-    secrets.listSecrets = async () => {
+  it("starts environments without secrets when the store is broken", async () => {
+    const { creds, art, store } = service()
+    await creds.saveArtifactory({ user: USER, token: art.identity })
+    store.listSecrets = async () => {
       throw new Error("keyring unavailable")
     }
     expect(await creds.upSecretFlags()).toEqual([])
@@ -427,7 +471,8 @@ describe("IBM Cloud (docker-credential-icr)", () => {
     const changes: CredentialsStatus[] = []
     const creds = new CredentialService({
       host,
-      secrets: new FakeSecrets(),
+      secrets: new FakeStore(),
+      tokens: tokensFor(new FakeStore(), new FakeArtifactory()).tokens,
       signIn: new GitHubSignIn({ host, onChange: () => {} }),
       binDir: BIN_DIR,
       fetch: vi.fn(async () => new Response("", { status: 200 })),
@@ -478,7 +523,8 @@ describe("IBM Cloud (docker-credential-icr)", () => {
     const changes: CredentialsStatus[] = []
     const creds = new CredentialService({
       host,
-      secrets: new FakeSecrets(),
+      secrets: new FakeStore(),
+      tokens: tokensFor(new FakeStore(), new FakeArtifactory()).tokens,
       signIn: new GitHubSignIn({ host, onChange: () => {} }),
       binDir: BIN_DIR,
       onChange: (s) => changes.push(s),
@@ -497,7 +543,8 @@ describe("credential freshness", () => {
     const clock = { now: Date.parse("2026-11-20T12:00:00Z") }
     const creds = new CredentialService({
       host,
-      secrets: new FakeSecrets(),
+      secrets: new FakeStore(),
+      tokens: tokensFor(new FakeStore(), new FakeArtifactory()).tokens,
       signIn: new GitHubSignIn({ host, onChange: () => {} }),
       binDir: BIN_DIR,
       fetch: vi.fn(async () => new Response("", { status: 200 })),

@@ -310,6 +310,52 @@ describe("EnvironmentService", () => {
     )
   })
 
+  it("delivers renewed secrets to running environments quietly, without an operation", async () => {
+    const script = baseScript()
+      .set("workspace list", "d2-list-running")
+      .set("workspace status", "e2-status-running")
+      .set("workspace up", "a-up-submit")
+      .set("workspace task logs", "b-task-logs-follow")
+    const { cli, service, env, until, snapshots } = setup(script, {
+      upSecrets: async () => ["SH_NETRC,type=mount,target=netrc"],
+    })
+    await service.start()
+    await until(() => env("try-python")?.state === "running", "listed")
+    const shownBefore = snapshots.length
+    const result = await service.deliverSecrets()
+    expect(result).toEqual({ delivered: 1, busy: 0, failed: 0 })
+    const up = cli.calls.find((c) => c[1] === "up") ?? []
+    expect(up[up.indexOf("--ide-launch") + 1]).toBe("skip")
+    expect(up[up.indexOf("--secret") + 1]).toBe(
+      "SH_NETRC,type=mount,target=netrc",
+    )
+    // Not an operation: the list never showed the environment busy.
+    expect(
+      snapshots
+        .slice(shownBefore)
+        .some((envs) => envs.some((e) => e.state === "busy")),
+    ).toBe(false)
+    expect(env("try-python")?.operation).toBeUndefined()
+  })
+
+  it("leaves environments busy with an operation for a later delivery", async () => {
+    const script = baseScript()
+      .set("workspace list", "d2-list-running")
+      .set("workspace status", "e2-status-running")
+      .set("workspace up", "a-up-submit")
+      .set("workspace task logs", "b-task-logs-follow")
+    const { service, env, until } = setup(script)
+    await service.start()
+    await until(() => env("try-python")?.state === "running", "listed")
+    void service.rebuild("try-python")
+    await until(() => env("try-python")?.state === "busy", "rebuilding")
+    expect(await service.deliverSecrets()).toEqual({
+      delivered: 0,
+      busy: 0,
+      failed: 0,
+    })
+  })
+
   it("shows a failed image pull on the download step", async () => {
     const script = baseScript()
       .set("workspace up", "a-up-submit")

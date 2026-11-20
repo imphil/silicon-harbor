@@ -41,6 +41,7 @@ export interface IpcDeps {
     | "cancelIbmCloudSignIn"
     | "saveArtifactory"
     | "removeArtifactory"
+    | "renewArtifactory"
   >
   /** The last lines of the setup log (requirement checks and fixes). */
   setupLog?(lines: number): string[]
@@ -158,6 +159,7 @@ export function registerIpc(deps: IpcDeps): void {
     credentials().saveArtifactory(SaveArtifactorySchema.parse(req)),
   )
   on(IpcChannel.credArtifactoryRemove, () => credentials().removeArtifactory())
+  on(IpcChannel.credArtifactoryRenew, () => credentials().renewArtifactory())
 
   on(IpcChannel.settingsGet, (): Settings => deps.settings.get())
   on(IpcChannel.settingsUpdate, (patch) => deps.settings.update(patch))

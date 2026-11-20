@@ -1,9 +1,8 @@
 /**
- * IBM Artifactory: an identity token the user creates on the Artifactory web
- * page (there is no sign-in flow we could drive) and pastes into Silicon
- * Harbor. It is kept in Devsy's secret store and mounted into environments
- * at /run/secrets/ARTIFACTORY_TOKEN, next to the w3id at /run/secrets/IBM_USER,
- * where the environments' own scripts read them.
+ * IBM Artifactory: the user creates an identity token on the Artifactory web
+ * page (there is no sign-in flow we could drive) and pastes it into Silicon
+ * Harbor once; artifactory-tokens.ts turns it into renewing tokens and the
+ * files the environments read in /run/secrets.
  */
 
 export const ARTIFACTORY_URL = "https://eu.artifactory.swg-devops.com/"
@@ -11,14 +10,6 @@ export const ARTIFACTORY_URL = "https://eu.artifactory.swg-devops.com/"
 /** A file every token for our repositories can read; 200 proves the token works. */
 export const ARTIFACTORY_CHECK_URL =
   "https://eu.artifactory.swg-devops.com/artifactory/sys-chipdev-cloud-team-electric-vapor-el8-rpm-local/repodata/repomd.xml"
-
-/** Secret names in Devsy's store (prefixed: the OS keyring is shared with other Devsy installs). */
-export const TOKEN_SECRET = "SH_ARTIFACTORY_TOKEN"
-export const USER_SECRET = "SH_IBM_USER"
-
-/** File names under /run/secrets in the environment. */
-export const TOKEN_TARGET = "ARTIFACTORY_TOKEN"
-export const USER_TARGET = "IBM_USER"
 
 export type TokenCheck =
   | { kind: "ok" }

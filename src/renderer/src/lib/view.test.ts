@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import type { Environment } from "$shared/api"
 import {
   currentError,
+  expiresIn,
   matchesSearch,
   primaryAction,
   relativeTime,
@@ -102,6 +103,17 @@ describe("relativeTime", () => {
   it("handles missing and invalid input", () => {
     expect(relativeTime(undefined, now)).toBe("—")
     expect(relativeTime("not a date", now)).toBe("—")
+  })
+})
+
+describe("expiresIn", () => {
+  const now = Date.parse("2026-11-19T12:00:00Z")
+  it("counts down in minutes, hours, then days", () => {
+    expect(expiresIn("2026-11-19T12:30:00Z", now)).toBe("expires in 30 minutes")
+    expect(expiresIn("2026-11-20T10:00:00Z", now)).toBe("expires in 22 hours")
+    expect(expiresIn("2026-11-24T12:00:00Z", now)).toBe("expires in 5 days")
+    expect(expiresIn("2026-11-19T11:00:00Z", now)).toBe("has expired")
+    expect(expiresIn(undefined, now)).toBe("")
   })
 })
 

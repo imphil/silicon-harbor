@@ -10,6 +10,7 @@ export class CredentialStore {
   status = $state<CredentialsStatus | null>(null)
   checking = $state(false)
   saving = $state(false)
+  renewing = $state(false)
   loadError = $state("")
   private unsubscribe?: () => void
 
@@ -88,5 +89,18 @@ export class CredentialStore {
       this.api().removeArtifactoryToken(),
     )
     if (status) this.status = status
+  }
+
+  /** "Renew now": a new container token, delivered to running environments. */
+  async renewArtifactory(): Promise<void> {
+    this.renewing = true
+    try {
+      const status = await attempt("Could not renew the token", () =>
+        this.api().renewArtifactoryToken(),
+      )
+      if (status) this.status = status
+    } finally {
+      this.renewing = false
+    }
   }
 }

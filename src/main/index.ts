@@ -1,9 +1,21 @@
 import { existsSync, mkdirSync } from "node:fs"
 import { homedir, uptime, userInfo } from "node:os"
 import { join } from "node:path"
-import { app, BrowserWindow, clipboard, ipcMain, shell } from "electron"
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  ipcMain,
+  powerMonitor,
+  shell,
+} from "electron"
 import { type AppInfo, IpcChannel } from "../shared/api.js"
-import { type DeviceCode, GitHubSignIn } from "./credentials/github.js"
+import {
+  ArtifactoryApi,
+  ArtifactoryTokens,
+} from "./credentials/artifactory-tokens.js"
+import { loadComputerId } from "./credentials/computer-id.js"
+import { type DeviceCode, GitHubSignIn, ghToken } from "./credentials/github.js"
 import { CredentialService } from "./credentials/service.js"
 import { DevsyClient } from "./devsy/client.js"
 import {
@@ -90,10 +102,29 @@ function startBackend(): void {
     onChange: () => onSignInChange(),
   })
   gitHubSignInForQuit = gitHubSignIn
+  let computerId: Promise<string> | undefined
+  const tokens = new ArtifactoryTokens({
+    store: client,
+    api: new ArtifactoryApi(),
+    computerId: () => {
+      computerId ??= loadComputerId(
+        host,
+        join(app.getPath("userData"), "computer-id"),
+      )
+      return computerId
+    },
+    githubToken: () => ghToken(host),
+    log: (entry) => setupLog.write(entry),
+  })
   const credentials = new CredentialService({
     host,
     secrets: client,
     signIn: gitHubSignIn,
+    tokens,
+    deliver: () =>
+      environments
+        ? environments.deliverSecrets()
+        : Promise.resolve({ delivered: 0, busy: 0, failed: 0 }),
     binDir,
     log: (entry) => setupLog.write(entry),
     onChange: (status) => broadcast(IpcChannel.evtCredentials, status),
@@ -143,6 +174,9 @@ function startBackend(): void {
   })
   void environments.start()
   void requirements.check()
+  // Artifactory tokens: renewed shortly after start, hourly, and on wake-up.
+  credentials.startSchedule()
+  powerMonitor.on("resume", () => credentials.wake())
   // Keep "This computer" (and the header's Ready / issue status) current
   // while the app stays open. Credentials are only checked on request: the
   // IBM Cloud check may open a login in the browser.

@@ -322,3 +322,18 @@ export function parseApiResponse(
     return null
   }
 }
+
+/**
+ * gh's token for GIT_HOST, for the netrc line in the environments. Quiet:
+ * the token never reaches the setup log. Undefined when not signed in.
+ */
+export async function ghToken(host: Host): Promise<string | undefined> {
+  const gh = await findGh(host)
+  if (!gh || !(await ghSignedIn(host))) return undefined
+  const res = await host.run(gh, ["auth", "token", "--hostname", GIT_HOST], {
+    timeoutMs: 15_000,
+    quiet: true,
+  })
+  const token = res.code === 0 ? res.stdout.trim() : ""
+  return token || undefined
+}

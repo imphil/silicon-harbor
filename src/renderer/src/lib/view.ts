@@ -119,6 +119,23 @@ export function relativeTime(
   return new Date(then).toLocaleDateString()
 }
 
+/** "expires in 5 days", "expires in 3 hours", "has expired". */
+export function expiresIn(iso: string | undefined, now = Date.now()): string {
+  if (!iso) return ""
+  const then = Date.parse(iso)
+  if (Number.isNaN(then)) return ""
+  const minutes = Math.round((then - now) / 60_000)
+  if (minutes <= 0) return "has expired"
+  if (minutes < 60)
+    return minutes === 1
+      ? "expires in 1 minute"
+      : `expires in ${minutes} minutes`
+  const hours = Math.round(minutes / 60)
+  if (hours < 48)
+    return hours === 1 ? "expires in 1 hour" : `expires in ${hours} hours`
+  return `expires in ${Math.round(hours / 24)} days`
+}
+
 /** Strips the scheme for compact display: github.ibm.com/org/repo */
 export function shortRepo(url: string): string {
   return url.replace(/^https?:\/\//, "").replace(/\.git$/, "")
