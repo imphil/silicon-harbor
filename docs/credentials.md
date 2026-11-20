@@ -69,11 +69,11 @@ Silicon Harbor runs every `up` with `--wait-for postStartCommand` (Devsy fork, v
 `updateContentCommand`, `postCreateCommand` and `postStartCommand` run before `up` returns and the IDE opens, while
 the connection to this computer is open.
 
-| Credential | In those hooks | In `postAttachCommand` |
-| --- | --- | --- |
-| Artifactory token and w3id (`/run/secrets/…`) | Yes (written before the hooks run) | Yes |
-| Git (HTTPS to github.ibm.com) | Yes: Devsy keeps its credential helper configured until container setup ends | No (runs in the background) |
-| gh | Yes: `GH_ENTERPRISE_TOKEN` / `GH_TOKEN` from the host's gh accounts, `GH_HOST` for a single account; masked in output, never written to disk | No |
+| Credential                                    | In those hooks                                                                                                                               | In `postAttachCommand`      |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| Artifactory token and w3id (`/run/secrets/…`) | Yes (written before the hooks run)                                                                                                           | Yes                         |
+| Git (HTTPS to github.ibm.com)                 | Yes: Devsy keeps its credential helper configured until container setup ends                                                                 | No (runs in the background) |
+| gh                                            | Yes: `GH_ENTERPRISE_TOKEN` / `GH_TOKEN` from the host's gh accounts, `GH_HOST` for a single account; masked in output, never written to disk | No                          |
 
 Verified 2026-11-20 on Linux with a volume clone and a local build of phw.7: the Git helper was configured during
 `postCreateCommand` and gone afterwards; gh got a token (`GH_HOST=github.com` here, the only account of this
