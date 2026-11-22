@@ -1,14 +1,10 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest"
 import {
-  buildJfrogConfig,
-  buildMarker,
-  buildNetrc,
   CONTAINER_LIFETIME_S,
   description,
   needsRenewal,
   PARENT_LIFETIME_S,
-  RELEASED_MARKER,
   SECRET,
   tokenInfo,
 } from "../credentials/artifactory-tokens"
@@ -17,10 +13,10 @@ import { FakeArtifactory, FakeStore, jwt, tokensFor } from "./fake-artifactory"
 const DAY = 24 * 60 * 60
 const USER = "dev@ibm.com"
 
-async function setUp(opts: { github?: () => string | undefined } = {}) {
+async function setUp() {
   const art = new FakeArtifactory()
   const store = new FakeStore()
-  const { tokens, log } = tokensFor(store, art, opts)
+  const { tokens, log } = tokensFor(store, art)
   await tokens.setup(art.identity, USER)
   return { art, store, tokens, log }
 }
@@ -43,47 +39,9 @@ describe("tokens", () => {
   })
 })
 
-describe("files for /run/secrets", () => {
-  it("netrc: both Artifactory hosts with the same token, GitHub when signed in", () => {
-    expect(buildNetrc({ user: USER, token: "T", githubToken: "gho_x" })).toBe(
-      "machine eu.artifactory.swg-devops.com login dev@ibm.com password T\n" +
-        "machine na.artifactory.swg-devops.com login dev@ibm.com password T\n" +
-        "machine github.ibm.com login dev@ibm.com password gho_x\n",
-    )
-    expect(buildNetrc({ user: USER, token: "T" })).not.toContain("github")
-  })
-
-  it("JFrog CLI config: today's format, no refresh fields", () => {
-    expect(JSON.parse(buildJfrogConfig({ user: USER, token: "T" }))).toEqual({
-      servers: [
-        {
-          url: "https://na.artifactory.swg-devops.com/",
-          artifactoryUrl: "https://na.artifactory.swg-devops.com/artifactory/",
-          user: USER,
-          password: "T",
-          serverId: "na-art",
-          isDefault: true,
-        },
-      ],
-      version: "6",
-    })
-  })
-
-  it("marker: what the container helper reads", () => {
-    expect(JSON.parse(buildMarker(1_800_000_000))).toEqual({
-      version: 1,
-      managedBy: "silicon-harbor",
-      mode: "shared",
-      expiresAt: 1_800_000_000,
-      files: ["ARTIFACTORY_TOKEN", "IBM_USER", "netrc", "jfrog-cli.conf"],
-    })
-    expect(JSON.parse(RELEASED_MARKER).managedBy).toBe("none")
-  })
-})
-
 describe("ArtifactoryTokens", () => {
-  it("sets up: a parent from the identity token, a container token from the parent, the files", async () => {
-    const { art, store, tokens } = await setUp({ github: () => "gho_x" })
+  it("sets up: a parent from the identity token, a container token from the parent", async () => {
+    const { art, store, tokens } = await setUp()
     const computer = "c0ffee000001"
     const [parent] = art.live(description(computer, "parent"))
     const [shared] = art.live(description(computer, "shared"))
@@ -92,20 +50,12 @@ describe("ArtifactoryTokens", () => {
     expect(store.values.get(SECRET.parent)).toBe(parent?.jwt)
     expect(store.values.get(SECRET.token)).toBe(shared?.jwt)
     expect(store.values.get(SECRET.user)).toBe(USER)
-    expect(store.values.get(SECRET.netrc)).toContain(
-      `machine na.artifactory.swg-devops.com login ${USER} password ${shared?.jwt}`,
-    )
-    expect(store.values.get(SECRET.netrc)).toContain("gho_x")
-    expect(JSON.parse(store.values.get(SECRET.marker) ?? "{}").expiresAt).toBe(
-      shared?.exp,
-    )
-    // The marker is mounted last, so a container never sees it before the files.
-    expect(await tokens.mounts()).toEqual([
+    // Plain secrets only; the container's hook builds netrc and the JFrog
+    // config. The marker is the core's (managed.ts), not this provider's.
+    expect(store.values.has("SH_MANAGED")).toBe(false)
+    expect(await tokens.secrets()).toEqual([
       "SH_IBM_USER,type=mount,target=IBM_USER",
       "SH_ARTIFACTORY_TOKEN,type=mount,target=ARTIFACTORY_TOKEN",
-      "SH_NETRC,type=mount,target=netrc",
-      "SH_JFROG_CONF,type=mount,target=jfrog-cli.conf",
-      "SH_MARKER,type=mount,target=.silicon-harbor.json",
     ])
     expect(await tokens.state()).toEqual({
       configured: true,
@@ -131,10 +81,10 @@ describe("ArtifactoryTokens", () => {
     expect(await tokens.renew()).toBe(true)
     const now = store.values.get(SECRET.token)
     expect(now).not.toBe(old)
-    // Containers that have not received the new files keep working.
+    // Containers that have not received the new token keep working.
     expect(art.live(shared)).toHaveLength(2)
     expect(art.valid(old ?? "")).toBe(true)
-    expect(store.values.get(SECRET.netrc)).toContain(now ?? "-")
+    expect(now).toBeDefined()
   })
 
   it("re-creates the parent 30 days before expiry and revokes the old parent", async () => {
@@ -162,27 +112,6 @@ describe("ArtifactoryTokens", () => {
     expect(art.live(description("aaaaaaaaaaaa", "shared"))).toHaveLength(0)
   })
 
-  it("rebuilds the files when gh's token changes", async () => {
-    let gh = "gho_one"
-    const { store, tokens } = await setUp({ github: () => gh })
-    expect(await tokens.renew()).toBe(false)
-    gh = "gho_two"
-    expect(await tokens.renew()).toBe(true)
-    expect(store.values.get(SECRET.netrc)).toContain("gho_two")
-  })
-
-  it("exchanges an identity token stored before v1 for a parent", async () => {
-    const art = new FakeArtifactory()
-    const store = new FakeStore()
-    store.values.set(SECRET.token, art.identity)
-    store.values.set(SECRET.user, USER)
-    const { tokens } = tokensFor(store, art)
-    expect(await tokens.renew()).toBe(true)
-    expect(tokenInfo(store.values.get(SECRET.parent) ?? "")).toBeDefined()
-    expect(tokenInfo(store.values.get(SECRET.token) ?? "")).toBeDefined()
-    expect(store.values.has(SECRET.marker)).toBe(true)
-  })
-
   it("is not configured without an identity token, and does nothing", async () => {
     const art = new FakeArtifactory()
     const { tokens } = tokensFor(new FakeStore(), art)
@@ -192,18 +121,14 @@ describe("ArtifactoryTokens", () => {
     expect(art.calls).toEqual([])
   })
 
-  it("removes: revokes this computer's tokens and releases /run/secrets", async () => {
+  it("removes: revokes this computer's tokens and forgets them", async () => {
     const { art, store, tokens } = await setUp()
     art.clock.s += 4 * DAY
     await tokens.renew() // two container tokens now
     await tokens.remove()
     expect(art.tokens.every((t) => t.revoked)).toBe(true)
-    expect([...store.values.keys()]).toEqual([SECRET.marker])
-    expect(store.values.get(SECRET.marker)).toBe(RELEASED_MARKER)
-    // Containers get the released marker; the scripts take over again.
-    expect(await tokens.mounts()).toEqual([
-      "SH_MARKER,type=mount,target=.silicon-harbor.json",
-    ])
+    expect([...store.values.keys()]).toEqual([])
+    expect(await tokens.secrets()).toEqual([])
   })
 
   it("runs one renewal at a time", async () => {

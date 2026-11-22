@@ -25,6 +25,8 @@ import {
   ghSignedIn,
 } from "./github"
 import { findIcrHelper, ICR_REGISTRY, type IcrGet, icrGet } from "./ibmcloud"
+import { ensureMarker, MARKER_SPEC } from "./managed"
+import type { SecretProvider } from "./provider"
 
 /** Results older than this are checked again when the pane asks for them. */
 export const STALE_AFTER_MS = 10 * 60_000
@@ -53,8 +55,13 @@ export interface CredentialServiceDeps {
   host: Host
   secrets: SecretStore
   signIn: GitHubSignIn
-  /** The Artifactory parent and container token and their files (shared design). */
+  /** The Artifactory parent and container token and the marker (shared design). */
   tokens: ArtifactoryTokens
+  /**
+   * Every provider of secrets for environments, in mount order (the
+   * SILICON_HARBOR marker follows them). Defaults to just `tokens`.
+   */
+  providers?: SecretProvider[]
   /** Writes renewed secret files into running environments (EnvironmentService.deliverSecrets). */
   deliver?(): Promise<DeliveryResult>
   /** Our bin dir (docker-credential-icr may be there, see credential-helper.ts). */
@@ -93,7 +100,7 @@ export class CredentialService {
   private icr: IcrGet | undefined
   /** The last automatic renewal's error, shown in the pane until one succeeds. */
   private renewalError: string | undefined
-  /** Changed files not yet written into every running environment. */
+  /** Changed secrets not yet written into every running environment. */
   private pendingDelivery = false
 
   constructor(private readonly deps: CredentialServiceDeps) {}
@@ -148,7 +155,11 @@ export class CredentialService {
    */
   signInChanged(): void {
     if (this.deps.signIn.active) this.emit()
-    else void this.checkGitHub()
+    else {
+      void this.checkGitHub()
+      // A new sign-in (or a sign-out) changes the GitHub token secret.
+      void this.renewNow()
+    }
   }
 
   /** Resolves when the sign-in ended; its result arrives as a change. */
@@ -190,18 +201,18 @@ export class CredentialService {
     }
     this.renewalError = undefined
     this.pendingDelivery = true
-    await this.deliver()
+    if (this.pendingDelivery) await this.deliver()
     await this.checkArtifactory()
     return this.current()
   }
 
-  /** Revokes Silicon Harbor's tokens and hands /run/secrets back to the container scripts. */
+  /** Revokes Silicon Harbor's Artifactory tokens; management stays as it is. */
   async removeArtifactory(): Promise<CredentialsStatus> {
     await this.deps.tokens.remove()
     this.deps.log?.("credentials: Artifactory removed")
     this.renewalError = undefined
     this.pendingDelivery = true
-    await this.deliver()
+    if (this.pendingDelivery) await this.deliver()
     await this.checkArtifactory()
     return this.current()
   }
@@ -218,16 +229,35 @@ export class CredentialService {
    * is shown in the pane and tried again at the next check.
    */
   async renewNow(force = false): Promise<void> {
-    try {
-      if (await this.deps.tokens.renew({ force })) this.pendingDelivery = true
-      this.renewalError = undefined
-    } catch (error) {
-      this.renewalError = (error as Error).message
-      this.deps.log?.(
-        `credentials: Artifactory renewal failed: ${this.renewalError}`,
-      )
-    }
+    if (await this.refreshProviders(force)) this.pendingDelivery = true
     if (this.pendingDelivery) await this.deliver()
+  }
+
+  private get providers(): SecretProvider[] {
+    return this.deps.providers ?? [this.deps.tokens]
+  }
+
+  /**
+   * Refreshes every provider; true when a mounted secret changed. A failing
+   * provider does not stop the others; Artifactory's failure is shown in the
+   * pane (`force` applies to it: "Renew now").
+   */
+  private async refreshProviders(force: boolean): Promise<boolean> {
+    let changed = false
+    for (const provider of this.providers) {
+      const artifactory = provider === this.deps.tokens
+      try {
+        if (await provider.refresh(artifactory ? { force } : {})) changed = true
+        if (artifactory) this.renewalError = undefined
+      } catch (error) {
+        const message = (error as Error).message
+        if (artifactory) this.renewalError = message
+        this.deps.log?.(
+          `credentials: ${provider.id} refresh failed: ${message}`,
+        )
+      }
+    }
+    return changed
   }
 
   /** Renewal checks while the app runs: shortly after start, then every hour. */
@@ -248,22 +278,20 @@ export class CredentialService {
   }
 
   /**
-   * `--secret` specs for `devsy workspace up`: the Artifactory token, the
-   * w3id, netrc, JFrog config and marker in /run/secrets. Renews first if
-   * due (this `up` then delivers the files). Never fails an `up`: without a
-   * readable store there are no flags.
+   * `--secret` specs for `devsy workspace up`: every provider's secrets in
+   * /run/secrets (the Artifactory token, the w3id, gh's token, the marker
+   * last). Renews first if due (this `up` then delivers them). Never fails an
+   * `up`: without a readable store there are no flags.
    */
   async upSecretFlags(): Promise<string[]> {
+    await this.refreshProviders(false)
     try {
-      await this.deps.tokens.renew()
-    } catch (error) {
-      this.renewalError = (error as Error).message
-      this.deps.log?.(
-        `credentials: Artifactory renewal before up failed: ${this.renewalError}`,
-      )
-    }
-    try {
-      return await this.deps.tokens.mounts()
+      await ensureMarker(this.deps.secrets)
+      const specs: string[] = []
+      for (const provider of this.providers)
+        specs.push(...(await provider.secrets()))
+      specs.push(MARKER_SPEC) // last: the files are in place before it
+      return specs
     } catch (error) {
       this.deps.log?.(
         `credentials: secret store unavailable, starting without secrets: ${(error as Error).message}`,

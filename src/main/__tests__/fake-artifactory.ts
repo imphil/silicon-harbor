@@ -127,14 +127,13 @@ export class FakeArtifactory {
 export function tokensFor(
   store: FakeStore,
   art: FakeArtifactory,
-  opts: { github?: () => string | undefined; computerId?: string } = {},
+  opts: { computerId?: string } = {},
 ) {
   const log: string[] = []
   const tokens = new ArtifactoryTokens({
     store,
     api: new ArtifactoryApi(art.fetch as typeof fetch),
     computerId: async () => opts.computerId ?? "c0ffee000001",
-    githubToken: async () => opts.github?.(),
     nowS: () => art.clock.s,
     log: (entry) => log.push(entry),
   })

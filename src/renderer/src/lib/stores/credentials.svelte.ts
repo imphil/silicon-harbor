@@ -53,7 +53,7 @@ export class CredentialStore {
   }
 
   signInGitHub() {
-    return attempt("Could not sign in to GitHub", () =>
+    return attempt("Could not sign in to github.ibm.com", () =>
       this.api().signInGitHub(),
     )
   }

@@ -92,7 +92,7 @@ const canSave = $derived(
   !credentials.saving && user.trim() !== "" && (token.trim() !== "" || stored),
 )
 
-// Prefill the w3id: the stored one, else the GitHub account's email address.
+// Prefill the w3id: the stored one, else the github.ibm.com account's email address.
 $effect(() => {
   if (userTouched) return
   user = artifactory?.user ?? github?.account?.email ?? ""
@@ -131,7 +131,7 @@ function cancelEdit(): void {
       <section class="sh-cred" aria-labelledby="sh-cred-github" data-testid="cred-github">
         <header class="sh-cred-head">
           <RequirementIcon state={githubIcon(github)} />
-          <h3 id="sh-cred-github">GitHub <span class="sh-mono sh-muted">{github.host}</span></h3>
+          <h3 id="sh-cred-github">{github.host}</h3>
           <Tag size="sm" type={tagType(github.state)}>{stateLabel[github.state] ?? github.state}</Tag>
         </header>
 
@@ -144,7 +144,8 @@ function cancelEdit(): void {
         <p class="sh-muted sh-small">
           Signed in through the GitHub CLI on this computer. Environments use this sign-in
           for Git and the GitHub CLI (gh): in their setup steps, and while your IDE or a
-          terminal is connected.
+          terminal is connected. They also find the token in
+          <span class="sh-mono">/run/secrets/GITHUB_IBM_COM_TOKEN</span> for tools that read a file.
         </p>
         <p class="sh-muted sh-small" data-testid="github-checked">
           {checkedAgo(github.checkedAt, relativeTime)}
@@ -234,12 +235,11 @@ function cancelEdit(): void {
           />
         {/if}
         <p class="sh-muted sh-small">
-          Environments find the token, your w3id, a <span class="sh-mono">netrc</span> and a
-          JFrog CLI configuration in <span class="sh-mono">/run/secrets</span>. Silicon Harbor
-          passes a renewed token to running environments as soon as it has one. If the repository does not keep
-          <span class="sh-mono">/run/secrets</span> in a volume of its own, an environment
-          created before Artifactory was set up is recreated once at its next start; changes
-          outside its source folder are lost then.
+          Environments find the token in <span class="sh-mono">/run/secrets/ARTIFACTORY_TOKEN</span>
+          and your w3id in <span class="sh-mono">IBM_USER</span>;
+          <span class="sh-mono">SILICON_HARBOR</span> tells the repository's scripts to leave
+          logins and renewal to Silicon Harbor. Silicon Harbor passes a renewed token to
+          running environments as soon as it has one.
         </p>
         <p class="sh-muted sh-small">{checkedAgo(artifactory.checkedAt, relativeTime)}</p>
 

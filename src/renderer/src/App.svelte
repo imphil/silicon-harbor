@@ -68,7 +68,6 @@ const healthTitle = $derived(
 <Header
   theme="classic"
   uiShellAriaLabel="Silicon Harbor"
-  companyName="IBM"
   platformName="Silicon Harbor"
   href="#/"
 >

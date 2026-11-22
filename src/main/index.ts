@@ -16,6 +16,7 @@ import {
 } from "./credentials/artifactory-tokens.js"
 import { loadComputerId } from "./credentials/computer-id.js"
 import { type DeviceCode, GitHubSignIn, ghToken } from "./credentials/github.js"
+import { GitHubToken } from "./credentials/github-token.js"
 import { CredentialService } from "./credentials/service.js"
 import { DevsyClient } from "./devsy/client.js"
 import {
@@ -113,7 +114,11 @@ function startBackend(): void {
       )
       return computerId
     },
-    githubToken: () => ghToken(host),
+    log: (entry) => setupLog.write(entry),
+  })
+  const githubToken = new GitHubToken({
+    store: client,
+    token: () => ghToken(host),
     log: (entry) => setupLog.write(entry),
   })
   const credentials = new CredentialService({
@@ -121,6 +126,7 @@ function startBackend(): void {
     secrets: client,
     signIn: gitHubSignIn,
     tokens,
+    providers: [githubToken, tokens],
     deliver: () =>
       environments
         ? environments.deliverSecrets()

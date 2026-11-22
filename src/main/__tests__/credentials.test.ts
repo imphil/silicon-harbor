@@ -12,6 +12,7 @@ import {
   parseApiResponse,
   parseSignInLine,
 } from "../credentials/github"
+import { GITHUB_SECRET, GitHubToken } from "../credentials/github-token"
 import {
   accountFromCredentials,
   ICR_REGISTRY,
@@ -238,7 +239,15 @@ describe("credential service", () => {
     const host = ghHost()
     const art = new FakeArtifactory()
     const store = new FakeStore()
-    const { tokens } = tokensFor(store, art, { github: () => "gho_x" })
+    const { tokens } = tokensFor(store, art)
+    const gh = { token: "gho_x" as string | undefined, fail: false }
+    const githubToken = new GitHubToken({
+      store,
+      token: async () => {
+        if (gh.fail) throw new Error("gh failed")
+        return gh.token
+      },
+    })
     const changes: CredentialsStatus[] = []
     const signIn = new GitHubSignIn({ host, onChange: () => {} })
     const deliveries: string[] = []
@@ -249,6 +258,7 @@ describe("credential service", () => {
       secrets: store,
       signIn,
       tokens,
+      providers: [githubToken, tokens],
       deliver: async () => {
         deliveries.push("deliver")
         const result = { delivered: busy ? 0 : 1, busy, failed: 0 }
@@ -264,6 +274,7 @@ describe("credential service", () => {
       host,
       art,
       store,
+      gh,
       creds,
       changes,
       deliveries,
@@ -293,7 +304,7 @@ describe("credential service", () => {
     })
   })
 
-  it("sets up with an identity token, delivers the files and shows both expiries", async () => {
+  it("sets up with an identity token, delivers the secrets and shows both expiries", async () => {
     const { creds, art, deliveries } = service()
     const status = await creds.saveArtifactory({
       user: ` ${USER} `,
@@ -308,23 +319,63 @@ describe("credential service", () => {
       parentExpiresAt: new Date((art.clock.s + 90 * DAY) * 1000).toISOString(),
     })
     expect(deliveries).toHaveLength(1)
+    // Every provider's secrets, plain values; the marker last.
     expect(await creds.upSecretFlags()).toEqual([
+      "SH_GITHUB_IBM_COM_TOKEN,type=mount,target=GITHUB_IBM_COM_TOKEN",
       "SH_IBM_USER,type=mount,target=IBM_USER",
       "SH_ARTIFACTORY_TOKEN,type=mount,target=ARTIFACTORY_TOKEN",
-      "SH_NETRC,type=mount,target=netrc",
-      "SH_JFROG_CONF,type=mount,target=jfrog-cli.conf",
-      "SH_MARKER,type=mount,target=.silicon-harbor.json",
+      "SH_MANAGED,type=mount,target=SILICON_HARBOR",
     ])
   })
 
-  it("changes only the w3id and rebuilds the files", async () => {
+  it("changes only the w3id and delivers it", async () => {
     const { creds, art, store, deliveries } = service()
     await creds.saveArtifactory({ user: USER, token: art.identity })
     const posts = art.calls.filter((c) => c.startsWith("POST")).length
     await creds.saveArtifactory({ user: "other@ibm.com", token: "" })
     expect(art.calls.filter((c) => c.startsWith("POST"))).toHaveLength(posts)
-    expect(store.values.get(SECRET.netrc)).toContain("login other@ibm.com")
+    expect(store.values.get(SECRET.user)).toBe("other@ibm.com")
     expect(deliveries).toHaveLength(2)
+  })
+
+  it("always mounts every provider's secrets and the marker, the marker last", async () => {
+    const { creds, store } = service()
+    expect(await creds.upSecretFlags()).toEqual([
+      "SH_GITHUB_IBM_COM_TOKEN,type=mount,target=GITHUB_IBM_COM_TOKEN",
+      "SH_MANAGED,type=mount,target=SILICON_HARBOR",
+    ])
+    expect(store.values.get("SH_MANAGED")).toBe("managed")
+  })
+
+  it("keeps gh's token current for environments", async () => {
+    const { creds, store, gh, deliveries } = service()
+    await creds.renewNow()
+    expect(store.values.get(GITHUB_SECRET.name)).toBe("gho_x")
+    expect(deliveries).toHaveLength(1)
+    await creds.renewNow()
+    expect(deliveries).toHaveLength(1) // unchanged: nothing to deliver
+    gh.token = "gho_new"
+    await creds.renewNow()
+    expect(store.values.get(GITHUB_SECRET.name)).toBe("gho_new")
+    expect(deliveries).toHaveLength(2)
+    gh.token = undefined // signed out
+    await creds.renewNow()
+    expect(store.values.has(GITHUB_SECRET.name)).toBe(false)
+    expect(deliveries).toHaveLength(3)
+    expect(await creds.upSecretFlags()).toEqual([
+      "SH_MANAGED,type=mount,target=SILICON_HARBOR",
+    ])
+  })
+
+  it("renews Artifactory even when gh fails", async () => {
+    const { creds, art, gh } = service()
+    await creds.saveArtifactory({ user: USER, token: art.identity })
+    gh.fail = true
+    art.clock.s += 4 * DAY
+    art.calls.length = 0
+    await creds.renewNow()
+    expect(art.calls.filter((c) => c.startsWith("POST"))).toHaveLength(1)
+    expect((await creds.get()).artifactory.renewalError).toBeUndefined()
   })
 
   it("rejects an invalid w3id, a token with spaces, or no token when not set up", async () => {
@@ -348,7 +399,8 @@ describe("credential service", () => {
   })
 
   it("renews when due and delivers, retrying while environments are busy", async () => {
-    const { creds, art, deliveries, busyOnce } = service()
+    const { creds, art, deliveries, busyOnce, gh } = service()
+    gh.token = undefined
     await creds.saveArtifactory({ user: USER, token: art.identity })
     deliveries.length = 0
     await creds.renewNow()
@@ -358,7 +410,7 @@ describe("credential service", () => {
     await creds.renewNow()
     expect(deliveries).toHaveLength(1) // renewed, but one environment was busy
     await creds.renewNow()
-    expect(deliveries).toHaveLength(2) // nothing due, delivered the pending files
+    expect(deliveries).toHaveLength(2) // nothing due, delivered the pending secrets
     await creds.renewNow()
     expect(deliveries).toHaveLength(2)
   })
@@ -389,7 +441,7 @@ describe("credential service", () => {
     expect(deliveries).toHaveLength(2)
   })
 
-  it("removes: revokes the tokens, releases /run/secrets and delivers that", async () => {
+  it("removes Artifactory: revokes its tokens and delivers that", async () => {
     const { creds, art, deliveries } = service()
     await creds.saveArtifactory({ user: USER, token: art.identity })
     const status = await creds.removeArtifactory()
@@ -397,7 +449,8 @@ describe("credential service", () => {
     expect(art.tokens.every((t) => t.revoked)).toBe(true)
     expect(deliveries).toHaveLength(2)
     expect(await creds.upSecretFlags()).toEqual([
-      "SH_MARKER,type=mount,target=.silicon-harbor.json",
+      "SH_GITHUB_IBM_COM_TOKEN,type=mount,target=GITHUB_IBM_COM_TOKEN",
+      "SH_MANAGED,type=mount,target=SILICON_HARBOR",
     ])
   })
 
