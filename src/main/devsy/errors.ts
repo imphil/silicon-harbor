@@ -3,7 +3,7 @@ import type { IdeId, StepId, UserError } from "../../shared/api"
 /**
  * Error catalog: translates Devsy failures into plain language.
  *
- * Most failures arrive with code UNKNOWN (docs/devsy-contract.md §5), so we
+ * Most failures arrive with code UNKNOWN (docs/developer/devsy/cli-contract.md §5), so we
  * match on the message as well. The CLI runs with LC_ALL=C, so git and Docker
  * messages are English.
  */

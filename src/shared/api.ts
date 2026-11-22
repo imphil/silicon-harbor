@@ -36,7 +36,7 @@ export type EnvironmentState =
   | "failed"
   | "unknown"
 
-/** The five user-facing progress steps (PLAN.md §2, docs/devsy-contract.md). */
+/** The five user-facing progress steps (PLAN.md §2, docs/developer/devsy/cli-contract.md). */
 export type StepId =
   /** Checking this computer */
   | "check"

@@ -2,7 +2,7 @@ import { z } from "zod"
 
 /**
  * Schemas for Devsy CLI output, as recorded in test/fixtures/devsy/ and
- * described in docs/devsy-contract.md. Unknown fields are ignored (zod strips
+ * described in docs/developer/devsy/cli-contract.md. Unknown fields are ignored (zod strips
  * them) so newer Devsy versions with extra fields keep working.
  */
 

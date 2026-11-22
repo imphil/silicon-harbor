@@ -1,7 +1,7 @@
-# Devsy CLI contract (as observed)
+# The Devsy CLI contract (as observed)
 
 Recorded 2026-11-19 against Devsy built from `devsy-org/devsy` @ `65c1a42` (`CGO_ENABLED=0 go build`, reports
-`v0.0.0`), docker provider, local Docker 29.7 on Linux. Fixtures: [`test/fixtures/devsy/`](../test/fixtures/devsy/).
+`v0.0.0`), docker provider, local Docker 29.7 on Linux. Fixtures: [`test/fixtures/devsy/`](https://github.com/imphil/silicon-harbor/tree/main/test/fixtures/devsy).
 
 Every call used the desktop app's protocol flags, `--log-level info --log-output json --result-format json`
 (`--result-format` omitted for `task logs`), and the env `DEVSY_UI=true`, `DEVSY_HOME=<isolated dir>`.
@@ -44,7 +44,7 @@ All NDJSON envelopes are on **stdout**; failures of `task logs` / `task get` put
 **stderr**. With `--log-output json`, `task logs` produced **no** zap log lines at all. The detailed build/hook
 output lives in the setup log store (`workspace logs --source setup`), not in the task stream.
 
-```jsonc
+```json
 // submit
 {"kind":"task","id":"iqauycmxoilv","runId":"c70e50f1-…"}
 

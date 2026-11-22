@@ -1,9 +1,12 @@
-# Credentials in environments
+# Credentials: internals
+
+How Silicon Harbor gets, renews and delivers credentials. What users see and do is in
+[](../user/credentials.md); what repositories get is in [](../user/repositories.md).
 
 Settings › Credentials shows the sign-ins environments use and whether they work.
 Code: `src/main/credentials/` (main process), `CredentialsPane.svelte` (renderer).
 
-## GitHub (github.ibm.com)
+## github.ibm.com
 
 The GitHub CLI (gh) on the host is the only GitHub sign-in, on every platform.
 
@@ -14,7 +17,7 @@ The GitHub CLI (gh) on the host is the only GitHub sign-in, on every platform.
 | gh in the environment               | Devsy's GitHub CLI forwarding, context option `SSH_INJECT_GITHUB_CREDENTIALS=true`. Silicon Harbor sets it on its own Devsy home the first time it runs `up` (`EnvironmentService.ensureProvider`). The environment needs gh installed; Devsy wraps it. Works while the IDE or a terminal is connected. |
 
 The forwarded token reaches every host account gh knows (also a github.com login, if the user has one). Code in the
-environment can use it for the GitHub API.
+environment can use it for the github.ibm.com API.
 
 ### Sign-in
 
@@ -38,7 +41,7 @@ local containers; per-container tokens and remote environments come later.
 
 Artifactory has no sign-in flow Silicon Harbor can drive. The pane shows how to create an identity token on
 <https://eu.artifactory.swg-devops.com/>. Silicon Harbor uses it **once**, to create tokens of its own; the user can
-revoke it afterwards. Code: `artifactory-tokens.ts` (tokens, files), `service.ts` (schedule, delivery).
+revoke it afterwards. Code: `artifactory-tokens.ts` (tokens), `service.ts` (schedule, delivery).
 
 ### Two tokens
 
@@ -56,10 +59,9 @@ same token. Artifactory has no refresh tokens: a token is renewed by creating a 
 - After a new parent, the old one is revoked (listed by description, `DELETE /access/api/v1/tokens/<id>`). An old
   container token is **not** revoked: environments that have not received the new one keep working until it
   expires on its own.
-- Expiry and id come from the token (a JWT: `exp`, `jti`). A stored value that is not a JWT is an identity token
-  saved before v1; the first renewal exchanges it for a parent.
-- **Remove** revokes all of this computer's tokens (container tokens first, then the parent), deletes the secrets
-  and leaves the released marker (below), so the repository's own scripts take over again.
+- Expiry and id come from the token (a JWT: `exp`, `jti`).
+- **Remove** revokes all of this computer's tokens (container tokens first, then the parent) and deletes the
+  secrets.
 
 ### When it renews
 
@@ -68,30 +70,35 @@ same token. Artifactory has no refresh tokens: a token is renewed by creating a 
 serialized. A failure (offline, token rejected) is kept as `renewalError`, shown in the pane, and tried again at the
 next run; it never fails an `up`. "Renew now" forces a new container token.
 
-### Files in /run/secrets
+### Providers and secrets
 
-| Devsy secret           | File                   | Content                                                                                        |
-| ---------------------- | ---------------------- | ---------------------------------------------------------------------------------------------- |
-| `SH_IBM_USER`          | `IBM_USER`             | w3id (defaults to the GitHub account's email)                                                  |
-| `SH_ARTIFACTORY_TOKEN` | `ARTIFACTORY_TOKEN`    | the container token                                                                            |
-| `SH_NETRC`             | `netrc`                | eu and na Artifactory with the container token; github.ibm.com with gh's token, if signed in   |
-| `SH_JFROG_CONF`        | `jfrog-cli.conf`       | JFrog CLI config, version 6, one server `na-art` (default) with the container token            |
-| `SH_MARKER`            | `.silicon-harbor.json` | `{"version":1,"managedBy":"silicon-harbor","mode":"shared","expiresAt":<epoch s>,"files":[…]}` |
+Silicon Harbor provides plain secrets; the repository builds the files its tools need (netrc, JFrog CLI config) in
+Devsy's `onSecretsChangedCommand` (fork, phw.10), which runs whenever a mounted value changed. Each provider
+(`SecretProvider` in `provider.ts`) keeps its Devsy secrets current with `refresh()` and lists them with
+`secrets()`.
 
-- The files are rebuilt after every run and stored only when their content changed (also for a new gh token or
-  w3id). A change makes Silicon Harbor deliver them.
-- Every `up` gets `--secret <name>,type=mount,target=<file>` for the secrets that exist, the marker last. Only names
-  are passed; a locked or unreadable store means no flags, never a failed `up`.
+| Provider            | Devsy secret              | File in `/run/secrets` | Content                                                        |
+| ------------------- | ------------------------- | ---------------------- | -------------------------------------------------------------- |
+| `GitHubToken`       | `SH_GITHUB_IBM_COM_TOKEN` | `GITHUB_IBM_COM_TOKEN` | `gh auth token --hostname github.ibm.com`; deleted on sign-out |
+| `ArtifactoryTokens` | `SH_IBM_USER`             | `IBM_USER`             | w3id (defaults to the github.ibm.com account's email)          |
+|                     | `SH_ARTIFACTORY_TOKEN`    | `ARTIFACTORY_TOKEN`    | the container token                                            |
+| (core)              | `SH_MANAGED`              | `SILICON_HARBOR`       | `managed`; always mounted, last                                |
+
+The marker belongs to the core (`managed.ts`), not to a provider, and is always mounted, after every provider's
+secrets: Silicon Harbor always provides the credentials in environments.
+
+- A refresh stores a secret only when its value changed. A failing provider does not stop the others.
+- Every `up` gets `--secret <name>,type=mount,target=<file>` for the secrets that exist. Only names are passed; a
+  locked or unreadable store means no flags, never a failed `up`.
 - Storage: `devsy secret set NAME --stdin`; values never appear on a command line. Devsy's `auto` backend uses the
   OS password store (Windows Credential Manager, macOS Keychain, Secret Service); without one, an age-encrypted file
   in the Devsy home. The keychain entry is not separate per Devsy home, hence the `SH_` prefix.
-- After Remove the marker is `{"version":1,"managedBy":"none"}`, which tells the scripts to manage the files again.
-- Container scripts check the marker with the helper in the design doc ("v1 implementation" tab) and skip their own
-  token handling while it says `silicon-harbor` and has not expired.
+- Container scripts compare the marker with one word (`[ "$(cat /run/secrets/SILICON_HARBOR)" = managed ]`). No
+  expiry: the containers' own renewal is off while it says `managed`.
 
 ### Delivery to running environments
 
-Devsy writes the files on `up` only. When the files change, `EnvironmentService.deliverSecrets()` runs a quiet `up`
+Devsy writes the files on `up` only. When a secret changes, `EnvironmentService.deliverSecrets()` runs a quiet `up`
 (no IDE launch, same `--wait-for` and secrets) for every environment in the "running" state. Environments busy with
 another operation are skipped and tried again at the next renewal run; stopped ones get the files at their next
 start. Devsy (fork, phw.9) replaces each file in one step (temp file and rename), so a reader never sees half a
@@ -108,8 +115,7 @@ rejected. The pane also shows when the container and the parent token expire.
 
 - `/run/secrets` is a tmpfs (`mode=755`, `noexec`) owned by root; each file is `0600`, owned by the container user.
 - If `devcontainer.json` mounts its own volume at `/run/secrets` (electric-vapor's `electric-vapor-secrets`, shared
-  by its containers), Devsy writes the files into that volume instead (fork, from phw.8; before, Docker failed
-  with "Duplicate mount point"). They then persist there and every container with that volume sees a new value at
+  by its containers), Devsy writes the files into that volume instead (fork, phw.8 or later). They then persist there and every container with that volume sees a new value at
   once. No recreation is needed. Verified 2026-11-20 on Linux with a volume clone.
 - The files exist before the lifecycle hooks run: a deferred `postCreateCommand` read both as the container user.
 - `mkdir -p /run/secrets` succeeds; new files cannot be created there (root-owned directory), existing ones can be
@@ -117,8 +123,9 @@ rejected. The pane also shows when the container and the parent token expire.
 - Every `up` rewrites the files (per Devsy's source, `pkg/devcontainer/setup/setup.go`); delivery to running
   environments relies on that.
 - Devsy masks the values in hook output and setup history (`***`), including the w3id.
-- Without such a volume, an environment created without these secrets is recreated once when it first starts with
-  them (Devsy needs the tmpfs mount); changes outside the source folder are lost then. The pane says so.
+- Without such a volume, Devsy recreates a container that was created without the tmpfs mount once when it starts
+  with secrets. Silicon Harbor always passes at least the marker, so its environments have the mount from the
+  start.
 
 ## IBM Cloud (icr.io)
 

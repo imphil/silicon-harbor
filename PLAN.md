@@ -19,7 +19,7 @@ Paste a Git URL → get a working environment open in your IDE. No container kno
 | Provider                | Docker, local only. Remote machines later (SSH or custom provider, TBD)                                                                                                                                                                                                                                                                                                           |
 | Environment definition  | Repos ship a complete `devcontainer.json` (incl. X11). No fallback image, no extra mounts                                                                                                                                                                                                                                                                                         |
 | Source location         | macOS/Windows: cloned into a Docker volume (`--clone-into-volume`, our Devsy fork), no host copy. Fedora: host folder bind-mounted                                                                                                                                                                                                                                                |
-| Git auth                | HTTPS only. The GitHub CLI on every platform (`gh auth login --web` + `gh auth setup-git`), checked and installed by us; its sign-in is forwarded into environments for Git and gh (Settings › Credentials, docs/credentials.md)                                                                                                                                                  |
+| Git auth                | HTTPS only. The GitHub CLI on every platform (`gh auth login --web` + `gh auth setup-git`), checked and installed by us; its sign-in is forwarded into environments for Git and gh (Settings › Credentials, docs/developer/credentials.md)                                                                                                                                        |
 | Registry auth           | `docker-credential-icr` for `icr.io` (works on macOS, Windows, Linux)                                                                                                                                                                                                                                                                                                             |
 | IDEs                    | VS Code, IBM Bob, VSCodium — Devsy installs open-remote-ssh into the IDE                                                                                                                                                                                                                                                                                                          |
 | Platforms               | macOS, Windows, Fedora (only Linux target)                                                                                                                                                                                                                                                                                                                                        |
@@ -55,7 +55,7 @@ Environments (home)
                                             tabs: Overview · Log
 Settings  /settings/:section
   ├─ This computer   (requirements check — same component as first-run Setup)
-  ├─ Credentials     (GitHub CLI sign-in, Artifactory token; docs/credentials.md)
+  ├─ Credentials     (GitHub CLI sign-in, Artifactory token; docs/developer/credentials.md)
   ├─ IDE             (default IDE)
   ├─ Updates
   └─ Support         (diagnostics bundle, log folder)
@@ -158,7 +158,7 @@ Devsy's desktop app also hard-codes `~/.devsy` for its file watch and logs.
 → Upstream fix: derive the socket name from `DEVSY_HOME`. Until then: CLI-only polling (enough for a handful of
 environments) and our own file watch on `$DEVSY_HOME`.
 
-### Corrections from the recorded fixtures (see `docs/devsy-contract.md`, `test/fixtures/devsy/`)
+### Corrections from the recorded fixtures (see `docs/developer/devsy/cli-contract.md`, `test/fixtures/devsy/`)
 
 - **Phase order** of a first `up`: `cloning_repository` → `resolving_config` → `initialize_command` →
   `preparing_devcontainer` (with `starting_container`, `injecting_agent`, `running_lifecycle_hook`) →
@@ -279,11 +279,11 @@ documented; all spikes green or with a written workaround.
 
 ### M0 status (2026-11-19)
 
-- Devsy contract recorded: 43 fixture cases + `docs/devsy-contract.md`.
+- Devsy contract recorded: 43 fixture cases + `docs/developer/devsy/cli-contract.md`.
 - Daemon-socket fix written and tested; released in our Devsy fork `imphil/devsy` v1.27.1-phw.2.
 - Skeleton done: Electron + Svelte 5 + Carbon, typed IPC, lint/check/unit tests (11) and Playwright smoke tests (6)
-  green. Carbon/Svelte 5 verdict: go (`docs/spikes/carbon-svelte5.md`).
-- Packaging from Linux (`docs/spikes/packaging.md`): macOS zip x64 + arm64 ad-hoc signed with rcodesign ✔, Fedora RPM ✔,
+  green. Carbon/Svelte 5 verdict: go (`docs/developer/spikes/carbon-svelte5.md`).
+- Packaging from Linux (`docs/developer/spikes/packaging.md`): macOS zip x64 + arm64 ad-hoc signed with rcodesign ✔, Fedora RPM ✔,
   Windows zip ✔. Windows NSIS installer ✔ in CI (electron-builder runs in the
   `electronuserland/builder` Wine image). CI: GitHub Actions on `imphil/silicon-harbor`, all targets on ubuntu-24.04.
 - Devsy binaries pinned and fetched with sha256 check by `scripts/fetch-devsy.mjs`. Source: our fork `imphil/devsy` v1.27.1-phw.9 (was upstream v1.27.1), checksums from the release's asset digests. (phw.1 has no binaries: its macOS build never got a runner.) Its CLI fetches the in-container agent from the fork's release too (`config.releaseRepo`).
@@ -292,7 +292,7 @@ documented; all spikes green or with a written workaround.
 
 ### M1 + M3 status (2026-11-19)
 
-- M1 engine done (`docs/engine.md`): CLI runner with allow-listed env + `LC_ALL=C`, docker provider bootstrap,
+- M1 engine done (`docs/developer/devsy/engine.md`): CLI runner with allow-listed env + `LC_ALL=C`, docker provider bootstrap,
   detached up/stop/delete/cancel with re-attach, five-step progress, status polling + file watch, per-environment
   logs, error catalog, settings, diagnostics, open IDE/terminal. Opt-in Docker integration test passed locally.
 - M3 UI done: all screens from the mockups, mock backend (`npm run dev:mock`) with fixture-based scenarios.
@@ -305,7 +305,7 @@ documented; all spikes green or with a written workaround.
 
 ### M2 status (2026-11-19)
 
-- Requirements implemented (`docs/requirements.md`): Rancher Desktop (macOS/Windows), Docker Engine / Fedora
+- Requirements implemented (`docs/developer/requirements.md`): Rancher Desktop (macOS/Windows), Docker Engine / Fedora
   `moby-engine` + docker group, WSL 2, XQuartz, docker-credential-icr + Docker config merge, Git Credential Manager
   (macOS) / Git for Windows, IDE detection. Checks run at start and on demand; fixes via the OS prompt; pending
   re-login/reboot remembered.
@@ -317,7 +317,7 @@ documented; all spikes green or with a written workaround.
   Fedora test machines.
 - 2026-11-20: Git sign-in switched to the GitHub CLI on all platforms (GCM dropped; pinned gh 2.105.0 pkg/MSI),
   plus Settings › Credentials (GitHub account check, browser sign-in with the one-time code shown in the app,
-  Artifactory token in Devsy's secret store, mounted at `/run/secrets` on every `up`). See docs/credentials.md.
+  Artifactory token in Devsy's secret store, mounted at `/run/secrets` on every `up`). See docs/developer/credentials.md.
 - 2026-11-20: Artifactory v1 (shared mode, local containers): the pasted identity token is used once to create a
   90-day parent token kept on the host, which creates 7-day container tokens; renewed while the app runs (start,
   hourly, wake, before `up`); `netrc`, JFrog CLI config and a `.silicon-harbor.json` marker for the container

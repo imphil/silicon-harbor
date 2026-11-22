@@ -4,7 +4,7 @@ import manifestJson from "../../../resources/installers/manifest.json"
 /**
  * Pinned vendor installers (resources/installers/manifest.json). Checksums come
  * from the vendors' published release metadata; an entry without a sha256 is
- * never run. Update procedure: docs/requirements.md.
+ * never run. Update procedure: docs/developer/requirements.md.
  */
 
 export const InstallerIdSchema = z.enum([

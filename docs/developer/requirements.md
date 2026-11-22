@@ -1,4 +1,4 @@
-# Requirements: check · fix · install (M2)
+# The computer check: check · fix · install
 
 What "This computer" (Settings) and first-run setup check, and what the fix
 buttons do. Code: `src/main/requirements/`, `src/main/installers/`,
@@ -37,7 +37,7 @@ manifest: `resources/installers/manifest.json`.
 | **Git sign-in: GitHub CLI**           | all            | Git present (macOS: command line tools via `xcode-select -p` or Homebrew git; Windows: `git --version`; Linux: on PATH). `gh` on PATH or where its installer puts it (`%ProgramFiles%\GitHub CLI`, `/usr/local/bin`). `github.ibm.com` listed in gh's `hosts.yml` (`$GH_CONFIG_DIR`, else `%AppData%\GitHub CLI` or `~/.config/gh`; read as a file, so no token reaches the setup log); `gh auth git-credential` as Git's credential helper for `https://github.ibm.com` (or globally); warns about a `url.*.insteadOf` rule that rewrites `https://github.ibm.com` (e.g. to SSH), without a fix. | No Git → macOS: `xcode-select --install` (Apple's dialog); Windows: Git for Windows (Inno Setup, silent, UAC). No gh → macOS: pinned pkg (password prompt); Windows: pinned MSI (UAC); Fedora: `pkexec dnf install -y gh git`. Not signed in → the browser sign-in of Settings › Credentials (`gh auth login --web` without a terminal; the one-time code is shown and copied, the page opens), then `gh auth setup-git --hostname github.ibm.com`. Signed in but not used by Git → `gh auth setup-git --hostname github.ibm.com`. |
 | **IDE**                               | all            | Like Devsy (`pkg/ide/vscode/open.go`): `code` / `bobide` / `codium` on PATH, then the macOS app paths; `--version`. Ok when the default IDE (Settings › IDE, IBM Bob unless changed) is found. A single installed IDE is always ok and becomes the default. Warn only when several are found and the default is not among them.                                                                                                                                                                                                                                                                   | None found → opens the IBM Bob download page (`https://bob.ibm.com/download?bob=ide`). No automatic install. Settings › IDE lists each IDE (installed, version, "Use by default", or a Download button to the vendor's page).                                                                                                                                                                                                                                                                                                      |
 
-The GitHub CLI is the GitHub sign-in on every platform: it is Git's credential helper for github.ibm.com, and Devsy forwards its token into environments (see [credentials.md](credentials.md)). Git Credential Manager is no longer used.
+The GitHub CLI is the sign-in to github.ibm.com on every platform: it is Git's credential helper for github.ibm.com, and Devsy forwards its token into environments (see [credentials.md](credentials.md)).
 
 The docker provider also supports `DOCKER_ELEVATION` (pkexec/sudo/doas) as an
 alternative to the `docker` group on Linux. Not used by Silicon Harbor; the
@@ -61,7 +61,7 @@ time.
 
 1. Read the release's asset metadata, e.g.
    `curl -s https://api.github.com/repos/<owner>/<repo>/releases/latest`.
-   GitHub returns a `digest: "sha256:…"` per asset; vendors' own checksum files
+   github.com returns a `digest: "sha256:…"` per asset; vendors' own checksum files
    (`*.sha256`, `SHA256SUMS`) are equally fine. Don't hash a download you made
    yourself — that only proves what you received.
 2. Update `version`, `url` and `sha256` per target, and `updated`.

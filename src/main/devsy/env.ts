@@ -5,7 +5,7 @@ import { posix, win32 } from "node:path"
  *
  * Devsy stores its complete process environment in task state
  * ($DEVSY_HOME/state/tasks/*.json) and returns it from `workspace task list`
- * (docs/devsy-contract.md §6). We therefore pass an allow-list only, never the
+ * (docs/developer/devsy/cli-contract.md §6). We therefore pass an allow-list only, never the
  * whole host environment.
  */
 
@@ -99,7 +99,7 @@ export function buildCliEnv(input: CliEnvInput): NodeJS.ProcessEnv {
     .join(separator)
 
   // English, stable messages: our error catalog matches on them, and git's
-  // messages are localized otherwise (docs/devsy-contract.md §5).
+  // messages are localized otherwise (docs/developer/devsy/cli-contract.md §5).
   env.LC_ALL = "C"
   env.LANG = "C"
   env.DEVSY_UI = "true"
@@ -138,7 +138,7 @@ export function executableSearchPath(
  *
  * Must stay short: Devsy creates unix sockets under $DEVSY_HOME/run/ and socket
  * paths are limited to 104 bytes, so Electron's userData directory
- * (~/Library/Application Support/…) is too long (docs/devsy-contract.md §6).
+ * (~/Library/Application Support/…) is too long (docs/developer/devsy/cli-contract.md §6).
  */
 export function defaultDevsyHome(
   platform: NodeJS.Platform,

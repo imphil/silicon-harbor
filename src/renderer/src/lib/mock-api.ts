@@ -2,7 +2,7 @@
  * In-memory implementation of SiliconHarborApi for development and tests.
  *
  * Timings, step sequences and failures follow the recorded Devsy behaviour in
- * test/fixtures/devsy and docs/devsy-contract.md:
+ * test/fixtures/devsy and docs/developer/devsy/cli-contract.md:
  * - create: check → clone → start (image pull + container) → prepare → ide
  * - restart skips the clone; stop/delete only use "check"
  * - a repository URL containing "denied" fails like an expired icr.io login

@@ -224,7 +224,7 @@ export class EnvironmentService {
     if (!r.exists) return r.lastOp ? "failed" : "unknown"
     const devsy = r.devsyState?.toLowerCase()
     // After a cancelled up, Devsy may report Running although setup did not
-    // finish (docs/devsy-contract.md §5).
+    // finish (docs/developer/devsy/cli-contract.md §5).
     if (
       r.lastOp?.state === "cancelled" &&
       UP_KINDS.includes(r.lastOp.kind) &&
@@ -445,7 +445,7 @@ export class EnvironmentService {
       const task = await this.opts.client.submitUp({
         ...args,
         // Every create/start hook runs before the IDE opens, with the
-        // credentials (docs/credentials.md); deferred hooks would get none.
+        // credentials (docs/developer/credentials.md); deferred hooks would get none.
         waitFor: "postStartCommand",
         ...(secrets.length > 0 ? { secrets } : {}),
         ide: this.opts.ideOverride ?? r.ide,

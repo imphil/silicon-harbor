@@ -1,4 +1,4 @@
-# Packaging for all targets runs on Linux. See docs/spikes/packaging.md.
+# Packaging for all targets runs on Linux. See docs/developer/spikes/packaging.md.
 appId: com.ibm.siliconharbor
 productName: Silicon Harbor
 copyright: Copyright © 2026 IBM

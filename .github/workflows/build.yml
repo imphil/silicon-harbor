@@ -1,7 +1,7 @@
 name: build
 
 # Everything runs on Linux: checks, tests and packaging for macOS, Windows and
-# Fedora. See docs/spikes/packaging.md for why this works without macOS or
+# Fedora. See docs/developer/spikes/packaging.md for why this works without macOS or
 # Windows runners.
 #
 # - push to main, pull requests: check + package, packages as run artifacts

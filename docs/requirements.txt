@@ -1,0 +1,4 @@
+# Documentation build: pip install -r docs/requirements.txt
+sphinx>=8,<10
+sphinx-carbon-theme>=0.1,<0.2
+myst-parser>=4,<6

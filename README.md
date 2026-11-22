@@ -5,81 +5,29 @@ environment open in IBM Bob, VS Code or VSCodium. Built on
 [Devsy](https://github.com/devsy-org/devsy), using the CLI from our fork
 [imphil/devsy](https://github.com/imphil/devsy).
 
-Status: M0 (foundations). See [PLAN.md](PLAN.md).
+## Documentation
 
-## Stack
+The documentation lives in [docs/](docs/) and is built with Sphinx:
 
-Electron + TypeScript, Svelte 5 + [carbon-components-svelte](https://svelte.carbondesignsystem.com),
-electron-vite, Biome, Vitest, Playwright. The pinned Devsy CLI is bundled in
-the app. No native Node modules, so every platform is packaged on Linux.
+- [User guide](docs/user/index.md): install, set up, create environments, credentials,
+  troubleshooting, preparing a repository.
+- [Developer guide](docs/developer/index.md): development setup, architecture, the
+  Devsy engine and fork, tests, packaging and releases.
 
-```
-src/main/       Electron main process
-src/preload/    contextBridge API (window.siliconHarbor)
-src/renderer/   Svelte + Carbon UI
-src/shared/     types shared by main and renderer (IPC contract)
-resources/devsy/devsy.json   pinned Devsy version + SHA-256 per target
-scripts/        fetch-devsy.mjs, after-pack.cjs (macOS ad-hoc signing)
-e2e/            Playwright smoke tests against real Electron
-docs/spikes/    M0 spike results
+```sh
+python3 -m venv docs/.venv && docs/.venv/bin/pip install -r docs/requirements.txt
+PATH="$PWD/docs/.venv/bin:$PATH" npm run docs     # → docs/_build/html/index.html
 ```
 
-## Development
+## Quick start for developers
 
 Requires Node 24.
 
 ```sh
-npm install                 # also downloads the Electron binary (postinstall)
-npm run fetch-devsy         # Devsy CLI for this machine → resources/bin/<os>-<arch>/
+npm install
+npm run fetch-devsy         # the pinned Devsy CLI for this machine
 npm run dev                 # app with hot reload, real Devsy backend
-npm run dev:mock            # UI against the built-in mock backend (no Devsy, no Docker)
+npm run dev:mock            # UI against the built-in mock backend
 ```
 
-The real backend uses `~/.silicon-harbor` as Devsy home. Override with
-`SH_DEVSY_HOME=/tmp/sh-dev` (keep it short: Devsy's unix sockets are limited to
-104 bytes) and the Electron profile with `SH_USER_DATA_DIR`. Mock scenarios:
-append `?mock=1&scenario=default|first-run|empty|all-ok&platform=mac|win|linux`
-to the renderer URL.
-
-Running from a terminal inside VS Code? Its extension host may export
-`ELECTRON_RUN_AS_NODE=1`, which makes Electron start as plain Node. Use
-`env -u ELECTRON_RUN_AS_NODE npm run dev`.
-
-Checks:
-
-```sh
-npm run lint                # Biome
-npm run check               # svelte-check + tsc
-npm test                    # Vitest unit tests
-npm run build && npm run test:e2e   # Playwright; on headless Linux: xvfb-run -a npm run test:e2e
-```
-
-### Using a local Devsy build
-
-```sh
-DEVSY_LOCAL_DIST=../devsy/dist npm run fetch-devsy
-```
-
-Copies `devsy-dev_<goos>_<goarch>*/devsy` from a goreleaser `dist/` directory
-instead of the pinned release. Not checksum-verified, so never release a
-package built this way.
-
-## Packaging (all on Linux)
-
-```sh
-RCODESIGN=/path/to/rcodesign npm run package:mac    # zip, x64 + arm64, ad-hoc signed
-npm run package:win                                  # NSIS installer, x64 — needs Wine (CI: Wine image)
-npm run package:linux                                # Fedora RPM, x64 — needs rpmbuild
-```
-
-Output goes to `release/`. Tool requirements and caveats are in
-[docs/spikes/packaging.md](docs/spikes/packaging.md). GitHub Actions runs the same
-commands on ubuntu runners and builds a draft release for `v*` tags:
-[.github/workflows/build.yml](.github/workflows/build.yml).
-
-To update Devsy: tag a release in [imphil/devsy](https://github.com/imphil/devsy),
-change `version` in `resources/devsy/devsy.json`, put each asset's SHA-256 there
-(the `digest` of the asset in the GitHub release API, not a hash of your own
-download), and run `npm run fetch-devsy`. The fork's CLI downloads its
-in-container agent from the same release, so the release must keep the Linux
-assets.
+Project plan and status: [PLAN.md](PLAN.md).

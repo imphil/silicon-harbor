@@ -9,7 +9,7 @@ import type { StatusEnvelope } from "./schemas"
 /**
  * Turns Devsy status events into the five user-facing steps.
  *
- * Rules from the recorded fixtures (docs/devsy-contract.md §2–3):
+ * Rules from the recorded fixtures (docs/developer/devsy/cli-contract.md §2–3):
  * - events arrive twice (with and without `pipeline`) → dedupe;
  * - `operationId` is reused within a stream → key progress by `phase`;
  * - `pipeline` is always "workspace_up" → ignore it, use our operation kind;

@@ -26,7 +26,7 @@ function findRcodesign() {
     throw new Error(
       "rcodesign not found. macOS builds need it for ad-hoc signing: " +
         "download apple-codesign from https://github.com/indygreg/apple-platform-rs/releases " +
-        "and set RCODESIGN=/path/to/rcodesign (see docs/spikes/packaging.md).",
+        "and set RCODESIGN=/path/to/rcodesign (see docs/developer/spikes/packaging.md).",
     )
   }
 }

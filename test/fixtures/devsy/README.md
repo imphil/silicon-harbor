@@ -1,6 +1,6 @@
 # Devsy CLI fixtures
 
-Recorded outputs of the real Devsy CLI. See [docs/devsy-contract.md](../../../docs/devsy-contract.md) for the analysis.
+Recorded outputs of the real Devsy CLI. See [docs/developer/devsy/cli-contract.md](../../../docs/developer/devsy/cli-contract.md) for the analysis.
 
 Each case directory has `cmd.txt` (command line + `# duration-ms`), `stdout.ndjson`, `stderr.ndjson`, `exit-code.txt`.
 Redacted placeholders: `$DEVSY_HOME`, `$SCRATCH`, `$HOME`, `$USER`, `$HOSTNAME`. The host environment in

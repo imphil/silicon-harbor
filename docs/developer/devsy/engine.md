@@ -1,7 +1,7 @@
-# Main process: Devsy engine (M1)
+# The Devsy engine
 
 How the main process implements `SiliconHarborApi` (`src/shared/api.ts`) on top of the Devsy CLI.
-Background: [devsy-contract.md](devsy-contract.md).
+Background: [devsy-contract.md](cli-contract.md).
 
 ```
 ipc.ts                  validates renderer input (zod), routes channels
@@ -98,11 +98,9 @@ boundary is slow.
   own worktree. Deleting an environment removes its worktree, and the volume
   once no worktree is left.
 - Progress: the clone and container start run in a nested `up` inside the
-  bootstrap container; the fork relays its phases (from v1.27.1-phw.2). From
-  v1.27.1-phw.4 the bootstrap preparation (volume, helper image, helper
-  container, agent) is reported as `cloning_repository` with the step
-  "preparing the source volume", and a first-time image pull no longer breaks
-  the container ID ("page not found"). Fixture:
+  bootstrap container; the fork relays its phases. The bootstrap preparation
+  (volume, helper image, helper container, agent) is reported as
+  `cloning_repository` with the step "preparing the source volume". Fixture:
   `test/fixtures/devsy/n-volume-clone-logs-follow`.
 - The helper container runs the nested `up`, including the repository's
   `initializeCommand` (there is no copy of the repository on the host to run
@@ -111,25 +109,19 @@ boundary is slow.
   (`cmd/internal/agentworkspace/bootstrap.Dockerfile` in the fork):
   `mcr.microsoft.com/devcontainers/base` Alpine (bash, git; pinned by digest)
   plus `git-lfs nodejs python3 npm make g++ docker-cli docker-cli-buildx
-  docker-cli-compose`. From v1.27.1-phw.6 the fork's release workflow
-  publishes it (amd64 + arm64, public) as
+  docker-cli-compose`. The fork's release workflow publishes it (amd64 + arm64, public) as
   `ghcr.io/imphil/devsy-volume-bootstrap:<first 12 hex of the Dockerfile's
   sha256>`; Devsy pulls it on first use ("downloading the helper image") and
-  only builds it locally if that fails. Before phw.5 it was `docker:27-cli`,
-  which has no bash, so `#!/bin/bash` initialize scripts failed with "not
-  found" (exit 127).
+  only builds it locally if that fails. It has bash, which `#!/bin/bash`
+  initialize scripts need.
 - Setup output (lifecycle hooks such as `initializeCommand`, the image
-  build) reaches the CLI through the helper container from phw.6. Silicon
+  build) reaches the CLI through the helper container. Silicon
   Harbor reads it every 3 s during an `up` (`devsy workspace logs --source
   setup --run <id> --after <cursor>`; `--follow` can end before the run does)
   and shows it in the Log tab as it arrives.
-- Until phw.7 the setup history of a volume clone stopped after the image
-  build: the nested agent's store sealed producer discovery at its first
-  record and rejected the workspace container's records (lifecycle hooks).
-  Fixed in the fork (`refreshDiscoverySealed`).
-- From phw.7 every `up` passes `--wait-for postStartCommand`: all create and
-  start hooks run before the IDE opens, with Git and GitHub CLI credentials
-  (docs/credentials.md). Their output is in the Log tab too.
+- Every `up` passes `--wait-for postStartCommand`: all create and start hooks
+  run before the IDE opens, with Git and GitHub CLI credentials
+  ([](../credentials.md)). Their output is in the Log tab too.
 - Not used on Fedora: Docker runs natively, and the host folder is fast and
   visible to host tools.
 

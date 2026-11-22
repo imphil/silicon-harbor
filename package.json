@@ -27,7 +27,8 @@
     "format": "biome format --write .",
     "postinstall": "install-electron",
     "pretest:e2e": "electron-vite build",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "docs": "sphinx-build -W --keep-going -b html docs docs/_build/html"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.4",
